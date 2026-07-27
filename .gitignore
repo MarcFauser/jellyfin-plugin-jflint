@@ -1,0 +1,14 @@
+# Build output
+bin/
+obj/
+
+# Packaged plugin artifacts (built by build.ps1, not versioned)
+dist/
+
+# Scratch/working dir: probe projects, downloaded Jellyfin sources, measurements
+tmp/
+
+# IDE / user-specific
+*.user
+.vs/
+.idea/
