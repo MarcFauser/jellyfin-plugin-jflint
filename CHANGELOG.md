@@ -24,3 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   file paths.
 - `jellyfin.ruleset` taken verbatim from `jellyfin-plugin-template`, so the build
   matches Jellyfin's house style while `TreatWarningsAsErrors` stays on.
+- `build.ps1`: publishes each target framework, writes the `meta.json` that Jellyfin's
+  plugin manager reads (`targetAbi` `10.11.0.0` / `12.0.0.0`, `status` 0 = Active) and
+  packs one installable ZIP per Jellyfin line into `dist\`. Strips everything but the
+  plugin's own files from the publish output.
+- `README.md` (build, install, endpoints) and `ARCHITECTURE.md` (layout, why two
+  endpoints, multi-targeting, package references).
