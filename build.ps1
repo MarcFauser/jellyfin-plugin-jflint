@@ -111,8 +111,9 @@ foreach ($t in $targets)
         assemblies  = @('Jellyfin.Plugin.JFLint.dll')
     }
 
-    # Written with LF and without a BOM - this repository never converts line endings.
-    $metaJson = ($meta | ConvertTo-Json -Depth 5).Replace("`r`n", "`n")
+    # Written without a BOM; Jellyfin's JSON reader chokes on one. Line endings are
+    # left as PowerShell writes them - nothing here reads meta.json line by line.
+    $metaJson = $meta | ConvertTo-Json -Depth 5
     $metaPath = Join-Path $stageDir 'meta.json'
     [System.IO.File]::WriteAllText($metaPath, $metaJson, [System.Text.UTF8Encoding]::new($false))
 
