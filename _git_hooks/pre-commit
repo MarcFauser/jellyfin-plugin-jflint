@@ -1,0 +1,23 @@
+#!/bin/sh
+# Aborts the commit when plugin source was changed but CHANGELOG.md
+# is not committed alongside it.
+
+staged=$(git diff --cached --name-only)
+
+# Only relevant when C# sources or the project file are part of the commit
+echo "$staged" | grep -qE '^Jellyfin\.Plugin\.JFLint/.*\.(cs|csproj)$' || exit 0
+
+# Is there a real change to CHANGELOG.md in this commit? Then we're good.
+if echo "$staged" | grep -q '^CHANGELOG\.md$'; then
+    exit 0
+fi
+
+echo "" >&2
+echo "  ABORT: plugin source was changed but CHANGELOG.md was not." >&2
+echo "  -> Add an entry under [Unreleased] in CHANGELOG.md" >&2
+echo "  -> bump the version in Jellyfin.Plugin.JFLint.csproj if needed" >&2
+echo "" >&2
+echo "  Commit without a changelog on purpose? -> git commit --no-verify" >&2
+echo "" >&2
+
+exit 1
