@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net9.0 is not a preference but a constraint: Jellyfin 10.11 runs on the .NET 9
+         runtime and cannot load a net10.0 assembly. net10.0 targets the v12 line. -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>Jellyfin.Plugin.JFLint</RootNamespace>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.0.0</Version>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>false</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <!-- Jellyfin's own ruleset, taken verbatim from jellyfin-plugin-template. It turns
+         off the StyleCop rules that contradict Jellyfin's house style (usings outside
+         the namespace, no file headers, no 'this.' prefix) and sharpens six CA rules to
+         Error. Everything not listed there still fails the build. -->
+    <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)..\jellyfin.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+
+  <!-- ControllerBase, [ApiController], [Authorize]. The server hosts ASP.NET Core; the
+       plugin only compiles against it. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- ExcludeAssets="runtime": the server ships these assemblies itself, the plugin
+       must not place copies next to its own DLL. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.11" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.11" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Database.Implementations" Version="10.11.11" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Jellyfin.Controller" Version="12.0.0-rc3" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="12.0.0-rc3" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Database.Implementations" Version="12.0.0-rc3" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>
