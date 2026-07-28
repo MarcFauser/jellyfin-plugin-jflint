@@ -30,3 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   plugin's own files from the publish output.
 - `README.md` (build, install, endpoints) and `ARCHITECTURE.md` (layout, why two
   endpoints, multi-targeting, package references).
+- `manifest.json` for Jellyfin's plugin catalogue, generated and kept up to date by
+  `build.ps1`: it adds the freshly built versions, keeps the older entries as release
+  history and sorts highest-first. `checksum` is the MD5 of the ZIP - Jellyfin verifies
+  it on download and aborts the install on a mismatch. Install URL in the README.
+
+### Changed
+- Version numbering now encodes the Jellyfin line in the major version: **`11.x.x.x`
+  for Jellyfin 10.11**, **`12.x.x.x` for Jellyfin 12** (was `1.0.0` for both). Two
+  entries sharing a version would be decided by array order alone after the `targetAbi`
+  filter, and a server upgrading from 10.11 to 12 would never be offered the matching
+  build. The version is declared per target framework in the project file; `build.ps1`
+  reads it from there, so there is one source of truth.
+- ZIP file names drop the ABI suffix - the version already identifies the line:
+  `jellyfin-plugin-jflint_11.1.0.0.zip`.
