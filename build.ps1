@@ -89,7 +89,7 @@ if (Test-Path -LiteralPath $distDir)
 {
     Remove-Item -LiteralPath $distDir -Recurse -Force
 }
-New-Item -ItemType Directory -Path $distDir | Out-Null
+$null = New-Item -ItemType Directory -Path $distDir
 
 Write-Host "JFLint  ($pluginId)" -ForegroundColor Cyan
 
