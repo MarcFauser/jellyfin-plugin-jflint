@@ -65,7 +65,33 @@ dist\jellyfin-plugin-jflint_1.0.0_abi12.0.0.0.zip
 
 `dotnet build` is used throughout - no MSBuild, no Visual Studio.
 
-## Install
+## Versions
+
+The major version says which Jellyfin line a build belongs to:
+
+| Plugin version | Jellyfin | targetAbi |
+|---|---|---|
+| `11.x.x.x` | 10.11.x | `10.11.0.0` |
+| `12.x.x.x` | 12.x | `12.0.0.0` |
+
+Bump the third part for fixes within a line. No version number may appear twice in the
+manifest: Jellyfin filters by `targetAbi` and then takes the highest version, so equal
+numbers would be decided by array order alone - and a server moving from 10.11 to 12
+would not be offered the matching build as an update.
+
+## Install via the plugin catalogue (recommended)
+
+Dashboard -> Plugins -> Repositories -> add:
+
+```
+https://raw.githubusercontent.com/MarcFauser/jellyfin-plugin-jflint/main/manifest.json
+```
+
+JFLint then appears under Catalogue. Jellyfin only offers the build whose `targetAbi`
+your server satisfies, verifies the download against the MD5 in the manifest, and
+handles later updates by itself.
+
+## Install by hand
 
 Jellyfin loads plugins from `<ProgramDataPath>/plugins/`. Ask the server where that is:
 
