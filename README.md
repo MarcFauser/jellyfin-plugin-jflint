@@ -65,6 +65,19 @@ dist\jellyfin-plugin-jflint_1.0.0_abi12.0.0.0.zip
 
 `dotnet build` is used throughout - no MSBuild, no Visual Studio.
 
+`build.ps1` also updates `manifest.json` with the MD5 of each ZIP it just produced.
+**The release asset and the committed `manifest.json` must come from the same run.**
+Every build embeds a fresh timestamp in `meta.json`, so a rebuild changes the ZIP and
+therefore its checksum - rebuilding after publishing leaves the manifest pointing at a
+checksum the uploaded asset no longer has, and Jellyfin aborts the install with
+`InvalidDataException`. Publish in this order:
+
+```powershell
+./build.ps1 -Changelog "what changed"
+gh release create v11.1.0.0 dist\jellyfin-plugin-jflint_11.1.0.0.zip --title v11.1.0.0
+git add manifest.json && git commit -m "Release 11.1.0.0" && git push
+```
+
 ## Versions
 
 The major version says which Jellyfin line a build belongs to:
