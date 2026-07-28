@@ -138,3 +138,9 @@ failure.
   `TreatWarningsAsErrors` can stay on without fighting Jellyfin's house style.
   Everything the ruleset does not exempt fails the build.
 - Install the changelog guard once per clone: `./install-git-hooks.ps1`.
+
+## License
+
+[AGPL-3.0](LICENSE). Note that Jellyfin itself is GPL-2.0 and the other plugins in the
+ecosystem are GPL-3.0; whether a plugin forms a combined work with its host is a legal
+question this project does not attempt to settle.
