@@ -37,6 +37,27 @@ speed: **they check each other.** Identical inputs must produce identical sets. 
 divergence means the hand-written SQL filter is wrong, and it shows up on the first
 comparison rather than months later in a stale report.
 
+### Measured, 2026-07-29
+
+Against the live server (Jellyfin 10.11.11, 30,077 episodes, 6 of them without a
+season). Three runs per endpoint, best value shown.
+
+| Route | Time | Hits |
+|---|---:|---:|
+| Fetch every episode and filter client-side | 25.4 s | 6 |
+| `EpisodesWithoutSeason` (`ILibraryManager`) | 2.9 s | 6 |
+| `EpisodesWithoutSeasonDB` (`JellyfinDbContext`) | **28 ms** | 6 |
+
+**All three return the same six item ids** (compared with `Compare-Object`, not just by
+count). The 25.4 s is a single request; the calling tool pages in six rounds and takes
+about 47 s for the same result, so the database route is roughly 1700× faster there and
+the `ILibraryManager` route about 16×.
+
+Worth knowing what the check actually finds: four of the six are not episodes at all but
+films and compilations filed as one - `Psych The Movie`, both parts of
+`Farscape The Peacekeeper Wars`, a retrospective and a tribute. The plugin reports the
+defect; deciding what to do with each is the calling tool's job.
+
 Two details that keep the database route honest:
 
 - The episode type string is **not** hardcoded. `BaseItemEntity.Type` holds a fully

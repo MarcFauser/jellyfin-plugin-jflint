@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Verified
+- Both endpoints measured against the live server (Jellyfin 10.11.11, 30,077 episodes):
+  `EpisodesWithoutSeasonDB` **28 ms**, `EpisodesWithoutSeason` **2.9 s**, versus **25.4 s**
+  for fetching every episode and filtering client-side. All three return the **same six
+  item ids** - compared by id with `Compare-Object`, not merely by count. Details in
+  [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ### Added
 - Project scaffolding: git repository, `.gitattributes` (`* -text`, no line-ending
   conversion), `.gitignore`, `CHANGELOG.md`, `HISTORY.md`, `CLAUDE.md`,
