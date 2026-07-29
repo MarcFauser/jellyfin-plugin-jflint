@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   it on download and aborts the install on a mismatch. Install URL in the README.
 
 ### Fixed
+- `ContinuousIntegrationBuild` was tried and removed again: measured, it does nothing
+  here. It normalises paths via `SourceRoot`, which the SCM queries supply - and those had
+  to be switched off for commit independence. The build is therefore reproducible within a
+  given checkout path, not across different ones; the reasoning is recorded in the project
+  file so nobody re-adds it expecting otherwise.
 - `EnableSourceControlManagerQueries` is now `false` as well. Turning off the version
   suffix alone was not enough: SourceLink still wrote a map containing the HEAD commit
   into the PDB, and the assembly carries its PDB's checksum in the debug directory - so
