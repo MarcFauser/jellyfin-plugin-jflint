@@ -39,6 +39,7 @@
         "changelog": "Erste Fassung: EpisodesWithoutSeason und EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
       }
-    ]
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/MarcFauser/jellyfin-plugin-jflint/main/logo.webp"
   }
 ]
