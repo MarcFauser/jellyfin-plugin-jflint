@@ -41,6 +41,69 @@ $h = @{ 'X-Emby-Token' = $apiKey }
 Invoke-RestMethod "$ServerUrl/JFLint/EpisodesWithoutSeasonDB" -Headers $h
 ```
 
+## Consuming them: the fallback chain
+
+A client should try the routes fastest-first and keep the old code path as the last
+resort, so it still works against a server where this plugin is absent, disabled, or no
+longer matches the Jellyfin version:
+
+```
+1. GET /JFLint/EpisodesWithoutSeasonDB     28 ms   - straight from the database
+2. GET /JFLint/EpisodesWithoutSeason        2.9 s  - via ILibraryManager
+3. fetch every episode, filter client-side  25 s+  - works on any Jellyfin
+```
+
+**Two ways to get this wrong, both of which fail quietly:**
+
+- **An empty result is not a failure.** `200` with `[]` means the library is clean -
+  that is the answer we want, not a reason to fall through to the 25-second scan. Only a
+  `404` (route not there) or a `5xx` (route there but broken, e.g. the database schema
+  moved under a new Jellyfin version) may advance the chain.
+- **`401`/`403` must abort, not fall through.** A wrong or expired API key would
+  otherwise silently push every run onto the slowest path, and the tool would just seem
+  to have got slower.
+
+```powershell
+function Get-EpisodesWithoutSeason
+{
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$ServerUrl, [Parameter(Mandatory)][hashtable]$Headers)
+
+    Set-StrictMode -Version Latest
+    $ErrorActionPreference = 'Stop'
+
+    foreach ($route in 'JFLint/EpisodesWithoutSeasonDB', 'JFLint/EpisodesWithoutSeason')
+    {
+        try
+        {
+            $treffer = Invoke-RestMethod -Uri "$ServerUrl/$route" -Headers $Headers
+            Write-Verbose "JFLint: $route"
+            return , @($treffer)   # das Komma verhindert das Entrollen einer 1-Element-Liste
+        }
+        catch
+        {
+            $code = $_.Exception.Response.StatusCode.value__
+
+            if ($code -ge 500)
+            {
+                Write-Warning "$route antwortete $code - das Plugin passt vermutlich nicht mehr zur Jellyfin-Version. Weiter mit dem naechsten Weg."
+            }
+            elseif ($code -ne 404)
+            {
+                throw   # 401/403 und alles Uebrige: NICHT ausweichen, sonst wird es still langsam
+            }
+        }
+    }
+
+    Write-Verbose 'JFLint nicht verfuegbar - alter Weg.'
+    return , @(Get-EpisodesWithoutSeasonLegacy -ServerUrl $ServerUrl -Headers $Headers)
+}
+```
+
+Worth logging which route answered. If step 1 starts warning, that is the signal to
+rebuild the plugin for the new Jellyfin line - the tool keeps working meanwhile, just
+slower, and nothing about the result changes.
+
 ## Requirements
 
 - Jellyfin **10.11.x** (built against 10.11.11) or **12.x** (built against 12.0.0-rc3,
