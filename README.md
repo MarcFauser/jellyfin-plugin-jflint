@@ -65,12 +65,19 @@ dist\jellyfin-plugin-jflint_1.0.0_abi12.0.0.0.zip
 
 `dotnet build` is used throughout - no MSBuild, no Visual Studio.
 
-`build.ps1` also updates `manifest.json` with the MD5 of each ZIP it just produced.
-**The release asset and the committed `manifest.json` must come from the same run.**
-Every build embeds a fresh timestamp in `meta.json`, so a rebuild changes the ZIP and
-therefore its checksum - rebuilding after publishing leaves the manifest pointing at a
-checksum the uploaded asset no longer has, and Jellyfin aborts the install with
-`InvalidDataException`. Publish in this order:
+**The build is reproducible.** Rebuilding without a source change produces byte-identical
+ZIPs, so a published release keeps matching the checksum in `manifest.json`. That is not
+free: the compiler is deterministic by itself, but the timestamp in `meta.json` and the
+per-file times stored inside the ZIP are pinned to the last commit that touched
+`Jellyfin.Plugin.JFLint/` - deliberately not `HEAD`, so committing the manifest or this
+README does not invalidate the artifacts.
+
+`build.ps1` ends with a block of checks that reproduce what Jellyfin does with these
+files: manifest shape, GUID, every `version`/`targetAbi` parsable, no duplicate version,
+and each `checksum` matched against the ZIP on disk. Each of those once failed for real,
+and each failed *silently*.
+
+Publish in this order:
 
 ```powershell
 ./build.ps1 -Changelog "what changed"
