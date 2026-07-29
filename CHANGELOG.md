@@ -5,7 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [11.1.0.1] / [12.1.0.1] - 2026-07-29
+
+Build metadata only - the compiled behaviour is identical to `11.1.0.0`. The version is
+raised because the artifacts for `11.1.0.0` were replaced in place while the reproducibility
+work was going on, so the published file no longer matched the one already installed, and
+Jellyfin offers no update when the version is unchanged. One version, one artifact.
 
 ### Verified
 - Both endpoints measured against the live server (Jellyfin 10.11.11, 30,077 episodes):
