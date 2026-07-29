@@ -11,7 +11,7 @@
         "version": "12.1.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.1.0.0/jellyfin-plugin-jflint_12.1.0.0.zip",
-        "checksum": "4435078db48d3c22f5ba01ae62462413",
+        "checksum": "01898cda2e46102c73382971c4a31613",
         "changelog": "Erste Fassung: EpisodesWithoutSeason und EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-28T00:16:30Z"
       },
@@ -19,7 +19,7 @@
         "version": "11.1.0.0",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.1.0.0/jellyfin-plugin-jflint_11.1.0.0.zip",
-        "checksum": "97e5ffa12f4422956b54e9eb80ab2047",
+        "checksum": "36053450842fc32a15b2b29ee8e6354a",
         "changelog": "Erste Fassung: EpisodesWithoutSeason und EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-28T00:16:30Z"
       }

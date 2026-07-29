@@ -42,6 +42,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   history and sorts highest-first. `checksum` is the MD5 of the ZIP - Jellyfin verifies
   it on download and aborts the install on a mismatch. Install URL in the README.
 
+### Fixed
+- `IncludeSourceRevisionInInformationalVersion` is now `false`. The SDK otherwise appends
+  the HEAD commit to `AssemblyInformationalVersion` and writes it into the assembly, so
+  **every** commit produced a different DLL - including commits that only touched the
+  README - and silently invalidated the checksum of an already published release. The
+  earlier claim that the compiler was deterministic came from a broken measurement: two
+  consecutive builds without a source change do not recompile at all, so the identical
+  hashes proved nothing. Verified properly this time, with a commit in between and a
+  forced rebuild.
+
 ### Changed
 - Version numbering now encodes the Jellyfin line in the major version: **`11.x.x.x`
   for Jellyfin 10.11**, **`12.x.x.x` for Jellyfin 12** (was `1.0.0` for both). Two
