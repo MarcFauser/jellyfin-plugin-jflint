@@ -65,6 +65,29 @@ registers them as MVC application parts), which makes a small plugin the direct 
   to build it, though - the reference packs are restored from NuGet (verified with a
   full probe build of the real controller code before the project was created).
 
+## 2026-07-29 - Three broken checks in a row
+
+Worth recording, because the pattern repeated: every one of these failures was a *check*
+that appeared to pass while testing nothing.
+
+- The repository manifest came out as `[[{…}]]` instead of `[{…}]`. The check for it
+  tested `StartsWith('[')` - which `[[` passes. Jellyfin swallowed the resulting
+  `JsonException` and the plugin simply never appeared in the catalogue. Found only in the
+  server log.
+- The verification that fetched the published manifest wrapped it in `@(...)`, which turns
+  the malformed bare object into a one-element array. The check normalised away the very
+  defect it existed to find.
+- "The compiler builds deterministically" came from building twice in a row and comparing
+  hashes. Nothing had changed, so MSBuild skipped compilation and never touched the file.
+  The retry was no better: the commit meant to sit between the two builds was rejected by
+  the changelog hook, so both ran on the same HEAD. Only the third attempt asserted that
+  HEAD had actually moved before comparing - and that one uncovered two real sources of
+  drift, the commit hash in `AssemblyInformationalVersion` and SourceLink's map in the PDB.
+
+The common thread: a check that touches the data before judging it, or that cannot fail
+for the reason it was written. Assert on the raw form, and make the check prove its own
+preconditions first.
+
 ### Deliberately not done here
 
 Rewriting jf-lint's `$scanEpisodesScript` is a separate step in the other repository,
