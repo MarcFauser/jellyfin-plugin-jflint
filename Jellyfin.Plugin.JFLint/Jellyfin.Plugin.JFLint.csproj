@@ -22,12 +22,13 @@
          just no longer points back at a specific commit. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
-    <!-- ContinuousIntegrationBuild, the usual "reproducible build" switch, was tried here
-         and does nothing: it normalises paths via SourceRoot, which the SCM queries above
-         supply - and those are off. Measured: identical hash, and the obj path stayed in
-         the debug directory. Consequence: the build is reproducible within a given
-         checkout path, not across different ones. That is fine for a single-machine
-         project; a clone elsewhere would need an explicit PathMap. -->
+    <!-- ContinuousIntegrationBuild, the usual "reproducible build" switch, does nothing
+         here - measured: identical hash, obj path still in the debug directory. It
+         normalises paths via SourceRoot, which the SCM queries above supply, and those are
+         off. PathMap does the same job without needing them: it rewrites the build
+         directory to a fixed placeholder, so a clone at any other path produces the same
+         bytes. Verified by building the same source from two different directories. -->
+    <PathMap>$(MSBuildProjectDirectory)=/_/</PathMap>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <!-- Jellyfin's own ruleset, taken verbatim from jellyfin-plugin-template. It turns
          off the StyleCop rules that contradict Jellyfin's house style (usings outside
