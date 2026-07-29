@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `logo.webp` as the catalogue tile, referenced from `manifest.json` via `imageUrl`.
+  240x240 with a real alpha channel (`VP8X` + `ALPH`), 15.8 KB - it sits on Jellyfin's
+  dark dashboard without a background box. Deliberately no new plugin version: the logo
+  lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
+  and `11.1.0.1` / `12.1.0.1` remain valid.
+
 ## [11.1.0.1] / [12.1.0.1] - 2026-07-29
 
 Build metadata only - the compiled behaviour is identical to `11.1.0.0`. The version is

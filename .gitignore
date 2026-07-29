@@ -8,8 +8,11 @@ dist/
 # Scratch/working dir: probe projects, downloaded Jellyfin sources, measurements
 tmp/
 
-# Logo candidates while deciding. The one that wins gets committed as logo.<ext>.
-logo[0-9].*
+# Draft logos live in logo\ and stay out of the repository. The folder is ignored as a
+# whole rather than by file name: a pattern like logo[0-9]*.* would let anything else
+# dropped in there slip into a commit. Only the chosen one is versioned, as logo.<ext>.
+logo/
+logo[0-9]*.*
 
 # IDE / user-specific
 *.user
