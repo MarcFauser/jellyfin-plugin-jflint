@@ -80,6 +80,36 @@ sources of `release-10.11.z` against `master`: `ILibraryManager.GetItemList`, th
 `InternalItemsQuery` fields used, `IItemTypeLookup`, and `Policies`. The v12 artifact
 therefore compiles - but it is **untested**, because no v12 server exists here.
 
+## Reproducible artifacts
+
+The point: rebuilding without a source change must not invalidate the checksum of an
+already published release. Four sources of drift, all found by measurement, three of them
+mine:
+
+| Source | Fix |
+|---|---|
+| Timestamp written into `meta.json` | pinned to the last commit touching `Jellyfin.Plugin.JFLint/` |
+| Per-file times stored by `Compress-Archive` | set to that same instant before zipping |
+| SDK appends the HEAD commit to `AssemblyInformationalVersion` | `IncludeSourceRevisionInInformationalVersion=false` |
+| SourceLink writes the HEAD commit into the PDB, whose checksum the DLL carries | `EnableSourceControlManagerQueries=false` |
+
+The last two are the interesting ones: **every** commit changed the DLL, including commits
+that only touched the README. The second was invisible from the outside - the commit hash
+never appeared in the DLL, only in the PDB, and the assembly's debug directory holds that
+PDB's checksum.
+
+**How this was almost missed.** The first check built twice in a row and compared hashes.
+They matched - because nothing had changed, so MSBuild skipped compilation entirely and
+never touched the file. A valid check needs a commit in between and a forced rebuild
+(`dotnet clean`). The second attempt at that check was also worthless: the commit was
+rejected by the changelog hook, so both builds ran on the same HEAD. Verified on the third
+attempt, which asserts that HEAD actually moved before comparing.
+
+**Known limit:** reproducible within a given checkout path, not across different ones - the
+debug directory still holds the absolute `obj\` path. `ContinuousIntegrationBuild=true`
+does not help, because it normalises paths via `SourceRoot`, which comes from the very SCM
+queries that had to be switched off.
+
 ## Package references
 
 | Package | Why |
