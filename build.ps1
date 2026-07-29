@@ -112,7 +112,7 @@ else
 }
 $timestamp = $stampUtc.ToString('yyyy-MM-ddTHH:mm:ssZ')
 
-Write-Host "JFLint  ($pluginId)  Zeitstempel $timestamp" -ForegroundColor Cyan
+Write-Host "JFLint  ($pluginId)  timestamp $timestamp" -ForegroundColor Cyan
 
 foreach ($t in $targets)
 {
@@ -284,11 +284,11 @@ if (-not [guid]::TryParse($probe[0].guid, [ref][guid]::Empty))
 #    Version.Parse in its setter, so a bad value takes the whole manifest down.
 foreach ($v in $probe[0].versions)
 {
-    foreach ($feld in 'version', 'targetAbi')
+    foreach ($field in 'version', 'targetAbi')
     {
-        if (-not [version]::TryParse($v.$feld, [ref]([version]'0.0')))
+        if (-not [version]::TryParse($v.$field, [ref]([version]'0.0')))
         {
-            throw "manifest entry has an unparsable $feld : $($v.$feld)"
+            throw "manifest entry has an unparsable $field : $($v.$field)"
         }
     }
 }
@@ -297,24 +297,24 @@ Write-Host "  ok  $($probe[0].versions.Count) version(s), all version/targetAbi 
 # 4. No version number twice. After the ABI filter Jellyfin takes the highest version;
 #    duplicates would be decided by array order alone, and an upgrading server would
 #    never be offered the matching build.
-$doppelt = $probe[0].versions | Group-Object version | Where-Object Count -gt 1
-if ($doppelt)
+$duplicates = $probe[0].versions | Group-Object version | Where-Object Count -gt 1
+if ($duplicates)
 {
-    throw "version $($doppelt[0].Name) appears $($doppelt[0].Count) times in the manifest."
+    throw "version $($duplicates[0].Name) appears $($duplicates[0].Count) times in the manifest."
 }
 
 # 5. Checksums must match the artifacts just built. Jellyfin verifies the MD5 after
 #    downloading and aborts with InvalidDataException on a mismatch.
 foreach ($t in $targets)
 {
-    $eintrag = $probe[0].versions | Where-Object version -eq $t.Version
-    $datei   = Join-Path $distDir $t.ZipName
-    $ist     = (Get-FileHash -LiteralPath $datei -Algorithm MD5).Hash.ToLowerInvariant()
-    if ($eintrag.checksum -ne $ist)
+    $entry  = $probe[0].versions | Where-Object version -eq $t.Version
+    $file   = Join-Path $distDir $t.ZipName
+    $actual = (Get-FileHash -LiteralPath $file -Algorithm MD5).Hash.ToLowerInvariant()
+    if ($entry.checksum -ne $actual)
     {
-        throw "checksum mismatch for $($t.ZipName): manifest $($eintrag.checksum), file $ist"
+        throw "checksum mismatch for $($t.ZipName): manifest $($entry.checksum), file $actual"
     }
-    if (-not $eintrag.sourceUrl.EndsWith("/$($t.ZipName)"))
+    if (-not $entry.sourceUrl.EndsWith("/$($t.ZipName)"))
     {
         throw "sourceUrl for $($t.Version) does not point at $($t.ZipName)"
     }
