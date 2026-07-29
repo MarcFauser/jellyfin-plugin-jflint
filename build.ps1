@@ -200,8 +200,17 @@ $fresh = foreach ($t in $targets)
 # Highest version first - that is the order Jellyfin picks from after the ABI filter.
 $package.versions = @($kept + $fresh | Sort-Object { [version]$_.version } -Descending)
 
-$manifestJson = ,$package | ConvertTo-Json -Depth 6
+# -AsArray is mandatory, and -InputObject rather than the pipeline: Jellyfin deserialises
+# the manifest into PackageInfo[], and a lone object throws a JsonException that
+# InstallationManager swallows - the plugin then simply never appears in the catalogue.
+# Piping ",$package" does NOT work: the pipeline unrolls the single-element array again.
+$manifestJson = ConvertTo-Json -InputObject @($package) -Depth 6 -AsArray
 [System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.UTF8Encoding]::new($false))
+
+if (-not $manifestJson.TrimStart().StartsWith('['))
+{
+    throw 'manifest.json must be a JSON array - Jellyfin cannot read a bare object.'
+}
 
 Write-Host ""
 Write-Host "Artifacts in $distDir" -ForegroundColor Cyan
