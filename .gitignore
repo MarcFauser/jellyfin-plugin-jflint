@@ -8,6 +8,9 @@ dist/
 # Scratch/working dir: probe projects, downloaded Jellyfin sources, measurements
 tmp/
 
+# Logo candidates while deciding. The one that wins gets committed as logo.<ext>.
+logo[0-9].*
+
 # IDE / user-specific
 *.user
 .vs/

@@ -6,7 +6,7 @@ changes lives in [CHANGELOG.md](CHANGELOG.md); this file records the reasoning.
 ## 2026-07-28 - Why this exists
 
 The sibling tool `jf-lint`
-(`a separate, private PowerShell tool`) has a tab
+(a separate, private PowerShell tool) has a tab
 "Episoden ohne Staffel": episodes whose season Jellyfin could not determine, i.e.
 `ParentIndexNumber IS NULL`. In this library that is **6 items out of 25,440** - and
 finding them takes **49.7 s** of the tool's ~57 s total runtime. It is by far the
