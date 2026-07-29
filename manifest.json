@@ -1,30 +1,28 @@
 [
-  [
-    {
-      "guid": "7febad9a-ee08-4eda-843a-a5522060a096",
-      "name": "JFLint",
-      "description": "Adds endpoints for library defects that /Items cannot filter for, starting with episodes whose season could not be determined.",
-      "overview": "Library-lint queries the Jellyfin API cannot express.",
-      "owner": "MarcFauser",
-      "category": "General",
-      "versions": [
-        {
-          "version": "12.1.0.0",
-          "targetAbi": "12.0.0.0",
-          "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.1.0.0/jellyfin-plugin-jflint_12.1.0.0.zip",
-          "checksum": "7220ff29c507f9872230157af0cdec4a",
-          "changelog": "Erste Fassung: EpisodesWithoutSeason und EpisodesWithoutSeasonDB.",
-          "timestamp": "2026-07-29T00:15:18Z"
-        },
-        {
-          "version": "11.1.0.0",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.1.0.0/jellyfin-plugin-jflint_11.1.0.0.zip",
-          "checksum": "733c99623a905583d1f23618ebdaa606",
-          "changelog": "Erste Fassung: EpisodesWithoutSeason und EpisodesWithoutSeasonDB.",
-          "timestamp": "2026-07-29T00:15:18Z"
-        }
-      ]
-    }
-  ]
+  {
+    "guid": "7febad9a-ee08-4eda-843a-a5522060a096",
+    "name": "JFLint",
+    "description": "Adds endpoints for library defects that /Items cannot filter for, starting with episodes whose season could not be determined.",
+    "overview": "Library-lint queries the Jellyfin API cannot express.",
+    "owner": "MarcFauser",
+    "category": "General",
+    "versions": [
+      {
+        "version": "12.1.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.1.0.0/jellyfin-plugin-jflint_12.1.0.0.zip",
+        "checksum": "4435078db48d3c22f5ba01ae62462413",
+        "changelog": "Erste Fassung: EpisodesWithoutSeason und EpisodesWithoutSeasonDB.",
+        "timestamp": "2026-07-28T00:16:30Z"
+      },
+      {
+        "version": "11.1.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.1.0.0/jellyfin-plugin-jflint_11.1.0.0.zip",
+        "checksum": "97e5ffa12f4422956b54e9eb80ab2047",
+        "changelog": "Erste Fassung: EpisodesWithoutSeason und EpisodesWithoutSeasonDB.",
+        "timestamp": "2026-07-28T00:16:30Z"
+      }
+    ]
+  }
 ]
