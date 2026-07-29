@@ -15,3 +15,6 @@ logo[0-9].*
 *.user
 .vs/
 .idea/
+
+# Design notes kept locally, not published
+HANDOVER-*.md

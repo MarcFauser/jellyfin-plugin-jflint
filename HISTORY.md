@@ -94,6 +94,4 @@ Rewriting jf-lint's `$scanEpisodesScript` is a separate step in the other reposi
 and it must keep the current code path as a fallback for servers without this plugin.
 A pull request against Jellyfin itself - adding a `hasParentIndexNumber` filter, for
 which `HasOfficialRating` is an exact template - is the proper general fix, but it
-would land in 12.1 at the earliest and so solves nothing today. See
-[HANDOVER-episodes-endpoint.md](HANDOVER-episodes-endpoint.md) for the full evidence
-table and the PR sketch.
+would land in 12.1 at the earliest and so solves nothing today.

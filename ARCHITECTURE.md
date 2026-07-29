@@ -1,8 +1,6 @@
 # Architecture
 
-How the plugin is put together and why. For the motivation see [HISTORY.md](HISTORY.md);
-for the underlying research and its citations see
-[HANDOVER-episodes-endpoint.md](HANDOVER-episodes-endpoint.md).
+How the plugin is put together and why. For the motivation see [HISTORY.md](HISTORY.md).
 
 ## Layout
 
