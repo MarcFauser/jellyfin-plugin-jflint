@@ -207,11 +207,18 @@ else
     }
 }
 
-$logo = Join-Path $root 'logo.png'
-if (Test-Path -LiteralPath $logo)
+# Optional catalogue tile. Any raster or vector format works - Jellyfin passes imageUrl
+# straight into an <img>, and raw.githubusercontent.com serves .svg as image/svg+xml
+# (measured), not as text/plain. Drop a logo.* next to this script and it is picked up.
+$logo = Get-ChildItem -LiteralPath $root -File |
+    Where-Object { $_.Name -match '^logo\.(png|jpg|jpeg|webp|svg)$' } |
+    Sort-Object Name | Select-Object -First 1
+
+if ($logo)
 {
-    $imageUrl = "https://raw.githubusercontent.com/$RepoOwner/$RepoName/main/logo.png"
+    $imageUrl = "https://raw.githubusercontent.com/$RepoOwner/$RepoName/main/$($logo.Name)"
     $package | Add-Member -NotePropertyName imageUrl -NotePropertyValue $imageUrl -Force
+    Write-Host "  Logo: $($logo.Name)" -ForegroundColor DarkGray
 }
 
 # Keep every version that is not being rebuilt right now, then add the fresh ones.
