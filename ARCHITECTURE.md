@@ -92,6 +92,7 @@ mine:
 | Per-file times stored by `Compress-Archive` | set to that same instant before zipping |
 | SDK appends the HEAD commit to `AssemblyInformationalVersion` | `IncludeSourceRevisionInInformationalVersion=false` |
 | SourceLink writes the HEAD commit into the PDB, whose checksum the DLL carries | `EnableSourceControlManagerQueries=false` |
+| Absolute build path in the assembly's debug directory | `PathMap` rewrites it to `/_/` |
 
 The last two are the interesting ones: **every** commit changed the DLL, including commits
 that only touched the README. The second was invisible from the outside - the commit hash
@@ -105,10 +106,13 @@ never touched the file. A valid check needs a commit in between and a forced reb
 rejected by the changelog hook, so both builds ran on the same HEAD. Verified on the third
 attempt, which asserts that HEAD actually moved before comparing.
 
-**Known limit:** reproducible within a given checkout path, not across different ones - the
-debug directory still holds the absolute `obj\` path. `ContinuousIntegrationBuild=true`
-does not help, because it normalises paths via `SourceRoot`, which comes from the very SCM
-queries that had to be switched off.
+**Path independence.** `ContinuousIntegrationBuild=true` is the usual switch for this and
+does nothing here - measured: identical hash, the `obj\` path still sat in the debug
+directory. It normalises paths via `SourceRoot`, which comes from the SCM queries that had
+to be switched off. `PathMap` achieves it without them by rewriting the project directory
+to `/_/`. Verified the only way that means anything: the same sources built from two
+differently named directories produce a byte-identical assembly, with zero absolute paths
+left in it.
 
 ## Package references
 
