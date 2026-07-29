@@ -76,9 +76,9 @@ function Get-EpisodesWithoutSeason
     {
         try
         {
-            $treffer = Invoke-RestMethod -Uri "$ServerUrl/$route" -Headers $Headers
+            $hits = Invoke-RestMethod -Uri "$ServerUrl/$route" -Headers $Headers
             Write-Verbose "JFLint: $route"
-            return , @($treffer)   # das Komma verhindert das Entrollen einer 1-Element-Liste
+            return , @($hits)   # the leading comma stops a one-element list being unrolled
         }
         catch
         {
@@ -86,16 +86,16 @@ function Get-EpisodesWithoutSeason
 
             if ($code -ge 500)
             {
-                Write-Warning "$route antwortete $code - das Plugin passt vermutlich nicht mehr zur Jellyfin-Version. Weiter mit dem naechsten Weg."
+                Write-Warning "$route answered $code - the plugin probably no longer matches this Jellyfin version. Falling through to the next route."
             }
             elseif ($code -ne 404)
             {
-                throw   # 401/403 und alles Uebrige: NICHT ausweichen, sonst wird es still langsam
+                throw   # 401/403 and everything else: do NOT fall through, or it just gets quietly slow
             }
         }
     }
 
-    Write-Verbose 'JFLint nicht verfuegbar - alter Weg.'
+    Write-Verbose 'JFLint unavailable - using the legacy path.'
     return , @(Get-EpisodesWithoutSeasonLegacy -ServerUrl $ServerUrl -Headers $Headers)
 }
 ```

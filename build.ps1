@@ -31,7 +31,10 @@ param(
     [ValidateSet('Release', 'Debug')]
     [string]$Configuration = 'Release',
 
-    # Shown in Jellyfin's plugin catalogue next to the version.
+    # Shown in Jellyfin's plugin catalogue next to the version, and visible to anyone who
+    # adds the repository - so English, like everything else in this project. It also has
+    # to hold for BOTH Jellyfin lines, since one value is written to every target: word it
+    # without naming a specific version number.
     [string]$Changelog = '',
 
     [string]$RepoOwner = 'MarcFauser',
