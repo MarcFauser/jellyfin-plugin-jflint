@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   it on download and aborts the install on a mismatch. Install URL in the README.
 
 ### Fixed
+- `EnableSourceControlManagerQueries` is now `false` as well. Turning off the version
+  suffix alone was not enough: SourceLink still wrote a map containing the HEAD commit
+  into the PDB, and the assembly carries its PDB's checksum in the debug directory - so
+  the DLL bytes changed even though the commit hash never appeared in the DLL itself.
 - `IncludeSourceRevisionInInformationalVersion` is now `false`. The SDK otherwise appends
   the HEAD commit to `AssemblyInformationalVersion` and writes it into the assembly, so
   **every** commit produced a different DLL - including commits that only touched the
