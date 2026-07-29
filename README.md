@@ -157,6 +157,11 @@ The major version says which Jellyfin line a build belongs to:
 | `11.x.x.x` | 10.11.x | `10.11.0.0` |
 | `12.x.x.x` | 12.x | `12.0.0.0` |
 
+**One version, one artifact.** Never replace a published ZIP under an existing version -
+Jellyfin compares versions to decide whether to offer an update, so an already installed
+server would keep the old file forever while the manifest advertises a different checksum
+under the same number. Raise the last part instead, even for a build-metadata-only change.
+
 Bump the third part for fixes within a line. No version number may appear twice in the
 manifest: Jellyfin filters by `targetAbi` and then takes the highest version, so equal
 numbers would be decided by array order alone - and a server moving from 10.11 to 12
