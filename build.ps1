@@ -17,9 +17,16 @@
     on the server and restarting Jellyfin. The server's ProgramDataPath is shown by
     GET /System/Info.
 
+    -Publish additionally creates one GitHub release per built artifact and pushes the
+    updated manifest.json. The order is not a convention but a constraint: a manifest
+    entry whose release does not exist yet is a 404 in the user's dashboard, so the
+    releases go first and the manifest only after the uploaded files have been
+    downloaded again and their checksums confirmed.
+
 .EXAMPLE
     ./build.ps1
     ./build.ps1 -Target net9.0
+    ./build.ps1 -Changelog 'What changed.' -Publish
 #>
 
 [CmdletBinding()]
@@ -38,7 +45,11 @@ param(
     [string]$Changelog = '',
 
     [string]$RepoOwner = 'MarcFauser',
-    [string]$RepoName  = 'jellyfin-plugin-jflint'
+    [string]$RepoName  = 'jellyfin-plugin-jflint',
+
+    # Create the GitHub releases and push manifest.json. Without this the build stays
+    # entirely local and nothing becomes visible to anyone.
+    [switch]$Publish
 )
 
 Set-StrictMode -Version Latest
@@ -87,6 +98,65 @@ if ($pluginSource -notmatch 'Guid\.Parse\("([0-9a-fA-F-]{36})"\)')
     throw 'Could not read the plugin GUID from Plugin.cs'
 }
 $pluginId = $Matches[1]
+
+# Runs a native command that is allowed to fail and returns its exit code. Needed because
+# a profile may set $PSNativeCommandUseErrorActionPreference, which turns a non-zero exit
+# into a terminating error and would take the "does this release exist" probe down with it.
+function Invoke-Native([scriptblock]$Command)
+{
+    try
+    {
+        $null = & $Command 2>&1
+        return $LASTEXITCODE
+    }
+    catch
+    {
+        return 1
+    }
+}
+
+# --- Publish preconditions -----------------------------------------------------------
+# Checked here, before the build, rather than next to the publishing code: every one of
+# them is knowable up front, and a publish that is going to be refused must not leave a
+# rewritten manifest.json behind. Found the hard way - a refused run had already replaced
+# the changelog of a published version in the working copy.
+if ($Publish)
+{
+    if ([string]::IsNullOrWhiteSpace($Changelog))
+    {
+        throw 'Publishing needs -Changelog: it is what the plugin catalogue shows next to the version.'
+    }
+
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue))
+    {
+        throw 'gh is not on PATH.'
+    }
+
+    if ((Invoke-Native { gh auth status }) -ne 0)
+    {
+        throw 'gh is not authenticated - run: gh auth login'
+    }
+
+    # The artifacts are stamped with the last commit that touched the plugin. If the source
+    # has moved since, the ZIP about to be published corresponds to no commit at all, and
+    # the next rebuild would produce a different file under the same version number.
+    $dirty = @(git -C $root status --porcelain -- 'Jellyfin.Plugin.JFLint')
+    if ($dirty.Count -gt 0)
+    {
+        throw "Uncommitted changes under Jellyfin.Plugin.JFLint. Commit them first, or the published ZIP matches no commit:`n  $($dirty -join "`n  ")"
+    }
+
+    # One version, one artifact. Replacing a published ZIP leaves every server that already
+    # installed it holding the old file forever, while the manifest advertises a different
+    # checksum under the same number - and Jellyfin only ever compares version numbers.
+    foreach ($t in $targets)
+    {
+        if ((Invoke-Native { gh release view "v$($t.Version)" --repo "$RepoOwner/$RepoName" }) -eq 0)
+        {
+            throw "Release v$($t.Version) already exists. Raise the version in the project file rather than replacing a published artifact."
+        }
+    }
+}
 
 if (Test-Path -LiteralPath $distDir)
 {
@@ -324,6 +394,82 @@ Write-Host "  ok  checksums and sourceUrl file names match the artifacts"
 Write-Host ""
 Write-Host "Artifacts in $distDir" -ForegroundColor Cyan
 Write-Host "manifest.json updated - $($package.versions.Count) version(s) listed" -ForegroundColor Cyan
+
+# --- Publish -------------------------------------------------------------------------
+# Two halves that cannot be rolled back independently: a release nobody's manifest names
+# is merely invisible, but a manifest entry without its release is a failed download in
+# the user's dashboard. So everything knowable is checked before anything becomes
+# visible, the releases go first, and the manifest follows only once the uploaded files
+# have been fetched back and hashed.
+if (-not $Publish)
+{
+    Write-Host ""
+    Write-Host "Nothing published. Add -Publish to create the releases and push the manifest." -ForegroundColor DarkGray
+    return
+}
+
 Write-Host ""
-Write-Host "Publish a build:  gh release create v<version> dist\<zip> --title v<version>" -ForegroundColor DarkGray
-Write-Host "Then commit manifest.json - Jellyfin reads it from the raw URL." -ForegroundColor DarkGray
+Write-Host "Publish" -ForegroundColor Cyan
+
+foreach ($t in $targets)
+{
+    $zip = Join-Path $distDir $t.ZipName
+    gh release create "v$($t.Version)" $zip --repo "$RepoOwner/$RepoName" --title "v$($t.Version)" --notes $Changelog
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "gh release create failed for v$($t.Version) - no manifest was pushed, so nothing is advertised that does not exist."
+    }
+}
+
+# Download what the world now sees. Hashing the local file again would prove nothing
+# about the upload, and this is exactly what Jellyfin does before it installs.
+$verifyDir = Join-Path $root 'tmp/publish-verify'
+$null = New-Item -ItemType Directory -Path $verifyDir -Force
+try
+{
+    foreach ($t in $targets)
+    {
+        $entry = $probe[0].versions | Where-Object version -eq $t.Version
+        $copy  = Join-Path $verifyDir $t.ZipName
+        Invoke-WebRequest -Uri $entry.sourceUrl -OutFile $copy
+        $actual = (Get-FileHash -LiteralPath $copy -Algorithm MD5).Hash.ToLowerInvariant()
+        if ($actual -ne $entry.checksum)
+        {
+            throw "the published v$($t.Version) hashes $actual, the manifest says $($entry.checksum)"
+        }
+        Write-Host "  ok  v$($t.Version) fetched back from the release, md5 matches the manifest"
+    }
+}
+finally
+{
+    Remove-Item -LiteralPath $verifyDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# Only manifest.json - never a blanket stage, which would sweep up whatever else happens
+# to be lying in the working directory.
+git -C $root add manifest.json
+git -C $root diff --cached --quiet
+if ($LASTEXITCODE -eq 0)
+{
+    Write-Host "  manifest.json unchanged - nothing to commit"
+}
+else
+{
+    git -C $root commit -m "Release $(($targets.Version) -join ' / ')"
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw 'git commit failed - the releases exist but the manifest is not committed.'
+    }
+}
+
+# The credential helper is supplied per invocation rather than configured globally: gh is
+# already authenticated (checked above), and this leaves the user's git config alone.
+git -C $root -c credential.helper='!gh auth git-credential' push origin HEAD
+if ($LASTEXITCODE -ne 0)
+{
+    throw 'git push failed - the releases exist but the manifest is not published yet. Push manually.'
+}
+
+Write-Host "  ok  manifest pushed" -ForegroundColor Green
+Write-Host ""
+Write-Host "Jellyfin reads: https://raw.githubusercontent.com/$RepoOwner/$RepoName/main/manifest.json" -ForegroundColor DarkGray

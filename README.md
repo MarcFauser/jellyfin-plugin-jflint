@@ -196,13 +196,31 @@ files: manifest shape, GUID, every `version`/`targetAbi` parsable, no duplicate 
 and each `checksum` matched against the ZIP on disk. Each of those once failed for real,
 and each failed *silently*.
 
-Publish in this order:
+## Publishing
 
 ```powershell
-./build.ps1 -Changelog "what changed"
-gh release create v11.1.0.0 dist\jellyfin-plugin-jflint_11.1.0.0.zip --title v11.1.0.0
-git add manifest.json && git commit -m "Release 11.1.0.0" && git push
+./build.ps1 -Changelog "what changed" -Publish
 ```
+
+One command, because the order is a constraint rather than a convention: **a manifest
+entry whose release does not exist yet is a failed download in the user's dashboard.** So
+`-Publish` creates the GitHub releases first, fetches each uploaded ZIP back and checks
+its MD5 against the manifest - which is exactly what Jellyfin does before installing -
+and only then commits and pushes `manifest.json`.
+
+It refuses to start, *before* building anything, when:
+
+- `-Changelog` is empty; it is what the catalogue shows next to the version
+- `gh` is missing or not authenticated
+- anything under `Jellyfin.Plugin.JFLint/` is uncommitted - the ZIP is stamped with the
+  last commit that touched the plugin, so otherwise the published file matches no commit
+- a release for one of the versions already exists - one version, one artifact
+
+The checks run up front rather than next to the publishing code so that a run which is
+going to be refused does not leave a rewritten `manifest.json` behind. That is not
+hypothetical: it happened while this was being written.
+
+Without `-Publish` the build stays entirely local and says so.
 
 ## Versions
 
