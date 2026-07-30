@@ -214,6 +214,14 @@ foreach ($t in $targets)
         targetAbi   = $t.TargetAbi
         # 0 = PluginStatus.Active
         status      = 0
+        # Deliberately off, and this is the flag that decides it: PluginUpdateTask runs at
+        # startup and every 24 hours and installs updates without asking, but
+        # InstallationManager.GetAvailablePluginUpdates skips a plugin whose manifest says
+        # AutoUpdate == false. Off means a new version can be tried out on one server at a
+        # time - no separate development repository needed just to keep a release from
+        # rolling out by itself. Note it is the INSTALLED plugin's meta.json that is read,
+        # not the repository manifest, so changing this only affects versions installed
+        # afterwards.
         autoUpdate  = $false
         changelog   = ''
         timestamp   = $timestamp
