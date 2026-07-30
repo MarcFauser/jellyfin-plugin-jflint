@@ -23,6 +23,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.2.0.1] / [12.2.0.1] - 2026-07-30
+
+### Fixed
+- `SeriesWithoutFilesDB` took **15.8 s**, slower than the `ILibraryManager` route it
+  exists to replace, while the other four database routes answer in 13-78 ms. Cause:
+  `BaseItems` carries its own index on `ParentId` but **none on `SeriesId`** - read off
+  the EF model, not guessed - so the correlated `NOT EXISTS (... WHERE SeriesId =
+  series.Id)` cost one table scan per series row, 1,585 of them. Replaced by one grouped
+  pass over the episodes that yields both the playable count and the total row count in a
+  single scan, plus one small query for the series rows.
+
+### Verified
+- All five findings measured against the live server (Jellyfin 10.11.11): **332 / 4 / 6 /
+  7 / 1**, matching the expected counts, and every `X`/`XDB` pair returns the identical
+  set of item ids - compared item by item with `Compare-Object`. `EpisodeRowCount` was
+  compared separately, since comparing ids alone would not have caught an error in it.
+
 ## [11.2.0.0] / [12.2.0.0] - 2026-07-30
 
 ### Added
