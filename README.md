@@ -14,8 +14,10 @@ See [HISTORY.md](HISTORY.md) for why the plugin exists and
 
 ## Endpoints
 
-Both require an authenticated **administrator** (`RequiresElevation`) because the
-response contains media file paths.
+Every route requires an authenticated **administrator** (`RequiresElevation`) because the
+responses contain media file paths.
+
+### Episodes without a season
 
 | Route | How it queries |
 |---|---|
@@ -40,6 +42,60 @@ different sets, the database query is wrong.
 $h = @{ 'X-Emby-Token' = $apiKey }
 Invoke-RestMethod "$ServerUrl/JFLint/EpisodesWithoutSeasonDB" -Headers $h
 ```
+
+### Library layout
+
+Five more findings, each again on two routes - `X` via `ILibraryManager`, `XDB` straight
+off the database. Answering these over the stock API costs ~22 s, because "did this folder
+yield any file at all" is a question about *absent* rows, so every episode has to cross
+the wire.
+
+| Route pair | Finds |
+|---|---|
+| `PhantomSeason` | a season folder with no readable number that does hold files - typically a per-episode release folder mistaken for a season |
+| `SeasonFolderWithoutVideo` | a season folder holding no playable episode, whatever its number |
+| `DuplicateSeasonNumber` | two or more seasons of one series sharing a number; every member of the group is returned |
+| `SeriesWithoutFiles` | a series folder Jellyfin read no playable file from, though the files are there |
+| `OrphanedItem` | a season or episode pointing at a series, season or parent row that no longer exists |
+
+All ten return the same shape, so one parser serves them all. Fields that do not apply to
+a kind are omitted, not sent as null:
+
+```json
+[
+  {
+    "Kind": "SeriesWithoutFiles",
+    "ItemId": "05ed59f206f57e57762a48315b65f1d2",
+    "ItemType": "Series",
+    "Name": "9-1-1",
+    "Path": "/…/Series/1080p/9-1-1.S02.…",
+    "EpisodeRowCount": 78
+  }
+]
+```
+
+`SeasonNumber` and `GroupSize` are filled for `DuplicateSeasonNumber`, `EpisodeRowCount`
+for `SeriesWithoutFiles`, `DanglingLink` and `DanglingId` for `OrphanedItem`. Everything
+is typed - no prose, no numbers inside strings - because the caller composes the sentences
+the user sees from its own language files.
+
+Rows come back ordered by series name, then season number, then name, nulls last. The
+order is identical on both routes of a pair, which is what makes comparing them a
+one-liner:
+
+```powershell
+$a = Invoke-RestMethod "$ServerUrl/JFLint/PhantomSeason"   -Headers $h
+$b = Invoke-RestMethod "$ServerUrl/JFLint/PhantomSeasonDB" -Headers $h
+Compare-Object $a.ItemId $b.ItemId    # nothing means the two agree
+```
+
+Two definitions worth knowing, both of which look like details and are not:
+
+- **A "real" episode is one with `IsVirtualItem == false`.** The virtual rows the Missing
+  Episode Fetcher creates must never count as content, or every finding above evaporates.
+- **An unset link is `Guid.Empty`, not null.** Jellyfin normalises `ParentId` to `NULL`
+  but writes `SeriesId` and `SeasonId` raw from non-nullable sources. `OrphanedItem`
+  treats all-zeroes as "not set"; without that it would report every seasonless episode.
 
 ## Consuming them: the fallback chain
 

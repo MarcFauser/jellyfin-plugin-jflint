@@ -14,6 +14,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.2.0.0] / [12.2.0.0] - 2026-07-30
+
+### Added
+- Five library-layout findings, each on two routes as the episode question already is -
+  ten in all. `PhantomSeason` (season folder with no readable number that does hold
+  files), `SeasonFolderWithoutVideo` (folder yielding no playable episode),
+  `DuplicateSeasonNumber` (two seasons of one series sharing a number),
+  `SeriesWithoutFiles` (series folder Jellyfin read no file from), `OrphanedItem`
+  (season or episode pointing at a row that is gone). Each with a `…DB` twin straight
+  off `JellyfinDbContext`; the pair is its own cross-check, since both must return the
+  same set item by item.
+- `LayoutFindingDto`: one shape for all ten routes, so a caller needs one parser. Carries
+  no prose and no numbers inside strings - `SeasonNumber`, `GroupSize`, `EpisodeRowCount`
+  and `DanglingId` are typed, and the calling tool composes every sentence the user sees
+  from its own language files. Unset fields are omitted by the server's serializer.
+- Rows are ordered server-side by series name, then season number, then name, nulls last.
+  Identical on both routes, which is what makes comparing a pair a one-liner.
+
+### Fixed
+- `Guid.Empty` is treated as "link not set". `BaseItemRepository.Map()` normalises
+  `ParentId` to `NULL` but writes `SeriesId` and `SeasonId` raw from non-nullable `Guid`
+  sources, so an unset link is stored as all zeroes. Read literally, `OrphanedItem` would
+  have reported every seasonless episode - 6 instead of 1 on the reference library - and
+  `DuplicateSeasonNumber` would have grouped every series-less season under one key and
+  called them duplicates of each other.
+- "Beneath" is `ParentId` for the two season findings, not `SeasonId`.
+  `Episode.FindSeasonId()` falls back to matching `ParentIndexNumber` against the series'
+  children when the file is not in a season folder, so `SeasonId` can name a season the
+  file does not physically sit under - which is exactly what `PhantomSeason` looks for.
+  Both links give the same numbers on the reference library; the physical one is what
+  keeps that true elsewhere.
+
 ## [11.1.0.1] / [12.1.0.1] - 2026-07-29
 
 Build metadata only - the compiled behaviour is identical to `11.1.0.0`. The version is

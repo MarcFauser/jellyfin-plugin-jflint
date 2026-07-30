@@ -10,8 +10,11 @@ Jellyfin.Plugin.JFLint\
     Jellyfin.Plugin.JFLint.csproj    net9.0 + net10.0, TreatWarningsAsErrors
     Plugin.cs                        BasePlugin<PluginConfiguration>, fixed GUID
     Configuration\PluginConfiguration.cs   empty on purpose - nothing to configure
-    Controllers\JFLintController.cs  both endpoints
-    Models\OrphanEpisodeDto.cs       record, six fields
+    Controllers\JFLintController.cs        the episode question, both routes
+    Controllers\LibraryLayoutController.cs five layout findings, both routes each
+    Models\OrphanEpisodeDto.cs             record, six fields
+    Models\LayoutFindingDto.cs             one shape for all ten layout routes
+    Models\LayoutFindingKind.cs            the five kind names, route and payload alike
 jellyfin.ruleset                     verbatim from jellyfin-plugin-template
 build.ps1                            publish -> meta.json -> dist\*.zip
 ```
@@ -63,6 +66,43 @@ Two details that keep the database route honest:
   is the same lookup Jellyfin uses internally.
 - `IsVirtualItem` has to be excluded explicitly. `ILibraryManager` applies Jellyfin's
   own visibility logic; raw table access does not.
+
+## Library layout findings
+
+Five more questions of the same nature, each again on two routes. They share one DTO so a
+caller needs one parser, and the five `ILibraryManager` routes share one internal pass, so
+a single request materialises the library once no matter which kind it asks about.
+
+Two decisions in there are not obvious, and both were the difference between a plausible
+answer and a correct one.
+
+**An unset link is `Guid.Empty`, not `NULL`.** `BaseItemRepository.Map()` normalises
+`ParentId` (`!dto.ParentId.IsEmpty() ? dto.ParentId : null`) but assigns `SeriesId` and
+`SeasonId` straight from non-nullable `Guid` sources, whose "nothing found" value is
+`Guid.Empty`. An anti-join written against `NULL` alone therefore reports every seasonless
+episode as orphaned - 6 instead of 1 on the reference library, five of them duplicates of
+what `EpisodesWithoutSeason` already reports - and groups every series-less season under
+one key.
+
+**"Beneath" is `ParentId`, not `SeasonId`.** `Episode.FindSeasonId()` falls back to
+matching `ParentIndexNumber` against the series' children when the file is not in a season
+folder, so `SeasonId` can name a season the file does not physically sit under. That is
+precisely the shape `PhantomSeason` exists to find, so the physical link is the right one.
+Both give identical numbers on the reference library and disagree on none of its 9,895
+seasons; the choice is about the libraries where they would differ.
+
+### Checking the SQL without a server
+
+EF Core reports an untranslatable query at *query-compilation* time, which on a server
+means at runtime, in front of the user. All six database queries are therefore compiled
+offline against a throwaway SQLite `JellyfinDbContext` and their `ToQueryString()` read -
+never executed, no data needed. That confirmed the correlated `EXISTS` in each finding, the
+`GROUP BY … HAVING COUNT(*) > 1` behind the duplicate check, and that `Guid.Empty` arrives
+as a parameter rather than tripping the translator. The probe lives in `tmp\` and is not
+versioned; it is a check, not a test suite.
+
+What it cannot tell us is whether the numbers are right. That needs the live server, and
+the request document carries the expected counts for exactly that comparison.
 
 ## Multi-targeting
 
