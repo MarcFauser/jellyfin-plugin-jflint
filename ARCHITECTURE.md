@@ -91,6 +91,47 @@ precisely the shape `PhantomSeason` exists to find, so the physical link is the 
 Both give identical numbers on the reference library and disagree on none of its 9,895
 seasons; the choice is about the libraries where they would differ.
 
+### Measured, 2026-07-30
+
+Against the live server (Jellyfin 10.11.11, 1,585 series / 9,895 seasons / 30,088 episode
+rows). Best of several runs after a warm-up call.
+
+| Finding | `…DB` | `ILibraryManager` | Hits |
+|---|---:|---:|---:|
+| `PhantomSeason` | 17.6 ms | 6.05 s | 332 |
+| `SeasonFolderWithoutVideo` | 13.8 ms | 5.99 s | 4 |
+| `DuplicateSeasonNumber` | 23.7 ms | 5.99 s | 6 |
+| `SeriesWithoutFiles` | 45 ms | 5.99 s | 7 |
+| `OrphanedItem` | 78.1 ms | 5.91 s | 1 |
+
+Every pair returns the **identical set of item ids**, compared item by item. `~22 s` was
+the cost of answering the same three tabs over the stock HTTP API.
+
+The object-model route costs about six seconds whichever finding is asked for - it
+materialises the library once per request, and all five kinds fall out of that one pass.
+Five separate requests therefore cost five times that, which is the price of failing over
+per finding rather than per bundle.
+
+**Comparing ids alone is not enough.** `EpisodeRowCount` is computed by both routes, so an
+error in it would have agreed with itself; it was compared separately, field by field.
+
+#### `SeriesWithoutFilesDB` was 15.8 s until the index was checked
+
+The obvious form of the query - `NOT EXISTS (... WHERE SeriesId = series.Id)` - took
+**15.8 s**, slower than the fallback it exists to replace, while its four siblings answered
+in 13-78 ms. `BaseItems` carries a dedicated index on `ParentId` and **none on `SeriesId`**,
+read off the EF model (`db.Model.FindEntityType(typeof(BaseItemEntity)).GetIndexes()`), so
+the correlated subquery was one table scan per series row, 1,585 of them.
+
+One grouped pass over the episode rows - `Count()` for the total, `Sum(e => e.IsVirtualItem
+? 0 : 1)` for the playable ones - answers both questions in a single scan and brought it to
+**45 ms**, a factor of about 350.
+
+Two things deliberately not done: no index was added, because that is Jellyfin's schema
+and a plugin that migrates its host's database promises far more than this feature is
+worth; and the finding was not switched to the indexed `ParentId`, because "anywhere
+beneath this series" is the actual question and `Episode.ParentId` points at a season.
+
 ### Checking the SQL without a server
 
 EF Core reports an untranslatable query at *query-compilation* time, which on a server

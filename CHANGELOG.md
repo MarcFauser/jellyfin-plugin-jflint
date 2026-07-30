@@ -32,7 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   the EF model, not guessed - so the correlated `NOT EXISTS (... WHERE SeriesId =
   series.Id)` cost one table scan per series row, 1,585 of them. Replaced by one grouped
   pass over the episodes that yields both the playable count and the total row count in a
-  single scan, plus one small query for the series rows.
+  single scan, plus one small query for the series rows. Measured after the change:
+  **45 ms**, best of five, and the answer did not move - the same seven ids, and
+  `EpisodeRowCount` still 78 / 42 / five zeros.
 
 ### Verified
 - All five findings measured against the live server (Jellyfin 10.11.11): **332 / 4 / 6 /
