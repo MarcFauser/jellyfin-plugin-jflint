@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `build.ps1 -Publish`: creates one GitHub release per artifact and pushes the updated
+  `manifest.json`, in that order. A manifest entry whose release does not exist yet is a
+  failed download in the dashboard, so the releases go first, each uploaded ZIP is fetched
+  back and its MD5 compared against the manifest - what Jellyfin itself does before
+  installing - and the manifest follows only after that. Refuses up front on an empty
+  changelog, missing or unauthenticated `gh`, uncommitted plugin source, or a version
+  whose release already exists. The checks sit before the build on purpose: a refused run
+  had otherwise already rewritten `manifest.json`, replacing the changelog of an
+  already published version in the working copy.
 - `logo.webp` as the catalogue tile, referenced from `manifest.json` via `imageUrl`.
   240x240 with a real alpha channel (`VP8X` + `ALPH`), 15.8 KB - it sits on Jellyfin's
   dark dashboard without a background box. Deliberately no new plugin version: the logo
