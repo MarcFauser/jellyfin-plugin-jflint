@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   pair agreeing is this plugin's main quality mechanism. `ItemType` in the response is
   now always a short name, never a fully qualified one.
 
+### Verified
+- Full suite against the live server: **18 checks passed, 0 warnings, 0 failures**. Every
+  pair agrees item by item, the whole `ItemsByPath` contract holds including the negative
+  cases, and `ItemsByPathDB` answers in **6.8 ms** against the ~7 s of the client-side
+  enumeration it replaces. The pair comparison for the path routes ran for the first time
+  here - before this fix the twin crashed before it could be compared.
+
 ## [11.3.0.0] / [12.3.0.0] - 2026-07-30
 
 ### Added

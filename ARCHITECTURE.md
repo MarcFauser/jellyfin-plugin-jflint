@@ -149,6 +149,22 @@ The pair convention is kept, but the twin is weaker than elsewhere.
 "beneath". The `ILibraryManager` route therefore materialises the library and filters in
 memory. That is the schema-change insurance, not a route to reach for.
 
+### Measured, 2026-07-31
+
+| | |
+|---|---:|
+| `ItemsByPathDB` | **6.8 ms** |
+| `ItemsByPath` (twin) | 12.4 s |
+| what it replaces: the caller reading every item and matching locally | ~7 s |
+
+The database route is the fastest thing in the plugin, which is what the `Path` index buys.
+
+**The twin is slower than the fallback it is supposed to precede**, and deliberately so:
+it materialises *every* item type, ~50,000 rows, where the layout routes only touch TV. It
+earns its place as the cross-check and as insurance against a schema change - it is not a
+faster path to the same answer. A caller should go from `ItemsByPathDB` straight to its own
+enumeration and use `ItemsByPath` only to verify, not to be quick.
+
 ### `StartsWith` would have thrown away the index
 
 `BaseItems` carries an index on `Path`, which is the whole reason this route can be fast.
