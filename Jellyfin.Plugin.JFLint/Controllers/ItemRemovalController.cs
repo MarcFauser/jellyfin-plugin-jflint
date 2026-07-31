@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Mime;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.JFLint.Models;
 using MediaBrowser.Common.Api;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -42,6 +44,10 @@ public class ItemRemovalController(
     ILibraryManager libraryManager,
     IAuthorizationContext authorizationContext) : ControllerBase
 {
+    // Enough to identify what is in the way without turning a refusal into a data dump.
+    // The count in the response stays exact however many are listed.
+    private const int BlockingChildSampleSize = 20;
+
     /// <summary>
     /// Removes one item from the library and leaves its file on disk.
     /// </summary>
@@ -66,14 +72,18 @@ public class ItemRemovalController(
     /// <response code="204">The entry was removed; the file was not touched.</response>
     /// <response code="400">The id is not a usable item id.</response>
     /// <response code="401">The caller may not delete this item.</response>
-    /// <response code="409">The item is a folder that still has descendants.</response>
+    /// <response code="409">
+    /// The item is a folder that still has descendants. The body is a
+    /// <see cref="DeleteConflictDto"/> naming up to twenty of them, because a bare count
+    /// leaves a caller with nowhere to look.
+    /// </response>
     /// <response code="410">No such item - it is already gone.</response>
     /// <returns>An <see cref="ActionResult"/> carrying the outcome.</returns>
     [HttpDelete("DeleteItemKeepFile/{itemId}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(DeleteConflictDto), StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status410Gone)]
     public async Task<ActionResult> DeleteItemKeepFileAsync(string itemId)
     {
@@ -102,12 +112,28 @@ public class ItemRemovalController(
 
         if (item is Folder folder)
         {
-            var remaining = folder.GetRecursiveChildren(false).Count;
-            if (remaining > 0)
+            // The refusal names its blockers rather than only counting them. A caller that
+            // is told "1 descendant" and can find none over HTTP has nowhere to go; one
+            // that is told which id, type and path is in the way can act or report it.
+            var children = folder.GetRecursiveChildren(false);
+            if (children.Count > 0)
             {
-                return Conflict(
-                    $"This item still has {remaining} descendant(s). Delete them first, deepest last - "
-                    + "one call each, so the repository never receives a batch.");
+                var sample = new List<BlockingChildDto>(Math.Min(children.Count, BlockingChildSampleSize));
+                foreach (var child in children)
+                {
+                    if (sample.Count == BlockingChildSampleSize)
+                    {
+                        break;
+                    }
+
+                    sample.Add(new BlockingChildDto(
+                        child.Id,
+                        child.GetBaseItemKind().ToString(),
+                        child.Name,
+                        child.Path));
+                }
+
+                return Conflict(new DeleteConflictDto(children.Count, sample));
             }
         }
 

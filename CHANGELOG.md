@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.5.0.0] / [12.5.0.0] - 2026-07-31
+
+### Changed
+- The `409` from `DeleteItemKeepFile` now names the descendants instead of only counting
+  them: a `DeleteConflictDto` with the exact `Remaining` count and a sample of up to
+  twenty `BlockingChildDto` - id, type, name and **path**. Same status, same refusal, same
+  guarantee.
+- The path is the field that earns its place. A blocker without one is a virtual entry; a
+  blocker with one is something the caller can go and look at on disk. A bare count left a
+  caller that could find no children over HTTP with nowhere to go at all.
+
 ## [11.4.0.0] / [12.4.0.0] - 2026-07-31
 
 ### Added
