@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.3.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.3.0.0/jellyfin-plugin-jflint_12.3.0.0.zip",
+        "checksum": "b09584afa354c226528f67ea283d6aab",
+        "changelog": "Adds ItemsByPath: every item at a given path plus everything beneath it, over ILibraryManager and straight from the database. Lets a caller turn a file or folder path into an item id without reading the whole library.",
+        "timestamp": "2026-07-31T12:14:15Z"
+      },
+      {
         "version": "12.2.0.1",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.2.0.1/jellyfin-plugin-jflint_12.2.0.1.zip",
@@ -38,6 +46,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.3.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.3.0.0/jellyfin-plugin-jflint_11.3.0.0.zip",
+        "checksum": "70732c3f410927d5dbf6ca8ffb5044da",
+        "changelog": "Adds ItemsByPath: every item at a given path plus everything beneath it, over ILibraryManager and straight from the database. Lets a caller turn a file or folder path into an item id without reading the whole library.",
+        "timestamp": "2026-07-31T12:14:15Z"
       },
       {
         "version": "11.2.0.1",
