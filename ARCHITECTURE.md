@@ -12,9 +12,11 @@ Jellyfin.Plugin.JFLint\
     Configuration\PluginConfiguration.cs   empty on purpose - nothing to configure
     Controllers\JFLintController.cs        the episode question, both routes
     Controllers\LibraryLayoutController.cs five layout findings, both routes each
+    Controllers\ItemLookupController.cs    ItemsByPath - a lookup, not a finding
     Models\OrphanEpisodeDto.cs             record, six fields
     Models\LayoutFindingDto.cs             one shape for all ten layout routes
     Models\LayoutFindingKind.cs            the five kind names, route and payload alike
+    Models\PathItemDto.cs                  record, four fields
 jellyfin.ruleset                     verbatim from jellyfin-plugin-template
 build.ps1                            publish -> meta.json -> dist\*.zip
 ```
@@ -131,6 +133,48 @@ Two things deliberately not done: no index was added, because that is Jellyfin's
 and a plugin that migrates its host's database promises far more than this feature is
 worth; and the finding was not switched to the indexed `ParentId`, because "anywhere
 beneath this series" is the actual question and `Episode.ParentId` points at a season.
+
+## The one lookup: `ItemsByPath`
+
+Every other route is a whole-library finding with no parameter. This one takes a path,
+covers **every** item type rather than just TV, and answers "what is *here*" instead of
+"what is broken". The departure is deliberate and is recorded here rather than left to be
+noticed: a caller that holds a path and needs an item id has no other way, because `/Items`
+exposes `Path` as an output field only. The alternative it replaces is reading ~50,000 rows
+in ~7 s to identify one item.
+
+The pair convention is kept, but the twin is weaker than elsewhere.
+`InternalItemsQuery.Path` exists and would serve the exact half - it is an equality filter
+(`e.Path == GetPathToSave(filter.Path)`) - but nothing in the query object expresses
+"beneath". The `ILibraryManager` route therefore materialises the library and filters in
+memory. That is the schema-change insurance, not a route to reach for.
+
+### `StartsWith` would have thrown away the index
+
+`BaseItems` carries an index on `Path`, which is the whole reason this route can be fast.
+It is only reached by a query the planner can use as a range, and the obvious form is not
+one. Read off the generated SQL before shipping:
+
+| written as | SQL | uses the index |
+|---|---|---|
+| `Path.StartsWith(prefix)` | `Path LIKE @p ESCAPE '\'` | **no** - SQLite skips the LIKE optimisation when an ESCAPE clause is present |
+| `Path >= p + "/"` and `< p + "0"` | plain range | yes |
+
+`'0'` is `'/' + 1`, so the half-open range is exactly "starts with `prefix/`". Anchoring on
+the separator is also what stops `/Movies/Ring` from matching `/Movies/Ring2` - the single
+most likely way to get this route quietly wrong.
+
+Two smaller findings from the same probe, both measured rather than assumed:
+
+- **The ordinal-explicit forms do not translate at all.** Both
+  `string.Compare(a, b, StringComparison.Ordinal)` and `string.CompareOrdinal` throw at
+  query compilation; `CompareTo` translates. It is culture-sensitive in C# and irrelevant
+  here, because EF turns it into a SQL comparison under the column's BINARY collation and
+  refuses to evaluate on the client.
+- **The stored path is the path the API reports.** `InternalItemsQuery.Path` runs its input
+  through `ReverseVirtualPath`, so a server using path substitutions could store something
+  else. Checked on this one by comparing the `Path` of both existing episode routes - the
+  database column against the object model - ordinally, across every row: no difference.
 
 ### Checking the SQL without a server
 

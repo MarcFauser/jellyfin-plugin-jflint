@@ -23,6 +23,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.3.0.0] / [12.3.0.0] - 2026-07-30
+
+### Added
+- `GET /JFLint/ItemsByPath?path=…` and `ItemsByPathDB`: every item at a path plus
+  everything beneath it. The stock API treats `Path` as an output field only, so a caller
+  holding a path and needing an item id - which is all `/Items/{id}/Refresh` and
+  `DELETE /Items/{id}` accept - had to read the entire item list and match locally, ~7 s
+  and ~50,000 rows to identify one item. A name search does not close the gap: the case
+  where an id is needed most is a wrong metadata match, and then the item's name has
+  nothing to do with its file name.
+- `PathItemDto` with `Id`, `ItemType`, `Name`, `Path`. Unlike every other route this one
+  is **not** restricted to TV - a movie is what prompted it - and it takes a parameter,
+  which makes it the first lookup rather than a finding. Noted in `ARCHITECTURE.md`
+  because it departs from the pattern.
+
+### Fixed
+- The path filter uses a half-open range (`Path >= p + "/"` and `Path < p + "0"`) rather
+  than the obvious `StartsWith`. EF turns `StartsWith` into `LIKE … ESCAPE '\'`, and
+  SQLite will not use an index for a LIKE carrying an ESCAPE clause - which would have
+  thrown away the `Path` index this route depends on. Read off the generated SQL before
+  shipping, not after measuring. Anchoring on the separator is also what stops
+  `/Movies/Ring` from swallowing `/Movies/Ring2`.
+
 ## [11.2.0.1] / [12.2.0.1] - 2026-07-30
 
 ### Fixed

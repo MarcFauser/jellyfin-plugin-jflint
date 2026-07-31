@@ -97,6 +97,39 @@ Two definitions worth knowing, both of which look like details and are not:
   but writes `SeriesId` and `SeasonId` raw from non-nullable sources. `OrphanedItem`
   treats all-zeroes as "not set"; without that it would report every seasonless episode.
 
+### Items at a path
+
+```
+GET /JFLint/ItemsByPath?path=<path>          via ILibraryManager
+GET /JFLint/ItemsByPathDB?path=<path>        straight from the database
+```
+
+The odd one out: a **lookup**, not a finding. It takes a parameter, and it covers **every**
+item type rather than just TV. Returns the item at that path plus everything beneath it.
+
+It exists because `/Items` treats `Path` as an output field only. A caller holding a path
+and needing an item id - which is all `/Items/{id}/Refresh` and `DELETE /Items/{id}`
+accept - otherwise has to read the whole item list and match locally: ~7 s and ~50,000
+rows to identify one item. Searching by name is no substitute, because the case where the
+id is needed most is a wrong metadata match, and then the name has nothing to do with the
+file name.
+
+```json
+[
+  { "Id": "…", "ItemType": "Movie", "Name": "…", "Path": "/…/Ring (2002).mkv" }
+]
+```
+
+Three properties of the contract worth relying on:
+
+- **Matching is ordinal and case-sensitive**, following SQLite's BINARY collation and the
+  case-sensitive file systems Jellyfin usually runs on.
+- **A path that holds nothing is `200` with `[]`**, never `404`. `404` means the plugin is
+  absent, which is what lets a caller fall through to its own slower path.
+- **The prefix is anchored on the separator**, so `/Movies/Ring` never matches
+  `/Movies/Ring2`. A trailing separator on the input is trimmed; a bare root is rejected
+  with `400` rather than returning the entire library.
+
 ## Consuming them: the fallback chain
 
 A client should try the routes fastest-first and keep the old code path as the last
