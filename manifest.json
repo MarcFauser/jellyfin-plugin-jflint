@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.4.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.4.0.0/jellyfin-plugin-jflint_12.4.0.0.zip",
+        "checksum": "ae7b2831379f58602232b65b604ab792",
+        "changelog": "Adds DeleteItemKeepFile: removes one library entry and leaves the media file on disk. The stock delete route hardcodes file deletion and does not expose the flag over HTTP. Takes no parameter, refuses a folder that still has descendants, and never deletes recursively.",
+        "timestamp": "2026-07-31T20:09:22Z"
+      },
+      {
         "version": "12.3.0.1",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.3.0.1/jellyfin-plugin-jflint_12.3.0.1.zip",
@@ -54,6 +62,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.4.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.4.0.0/jellyfin-plugin-jflint_11.4.0.0.zip",
+        "checksum": "8eddfeb1a103b55c79de1aa75641ed25",
+        "changelog": "Adds DeleteItemKeepFile: removes one library entry and leaves the media file on disk. The stock delete route hardcodes file deletion and does not expose the flag over HTTP. Takes no parameter, refuses a folder that still has descendants, and never deletes recursively.",
+        "timestamp": "2026-07-31T20:09:22Z"
       },
       {
         "version": "11.3.0.1",
