@@ -205,6 +205,49 @@ versioned; it is a check, not a test suite.
 What it cannot tell us is whether the numbers are right. That needs the live server, and
 the request document carries the expected counts for exactly that comparison.
 
+## The one destructive route
+
+`DeleteItemKeepFile` is the only route here that changes anything, and the only one
+without a twin - there is nothing to cross-check, and a second way to delete would be a
+second way to be wrong.
+
+Its safety is **structural, not conditional**, which is the only design decision worth
+recording. Three choices, each of which removes a way to be wrong rather than checking for
+it:
+
+| instead of | this |
+|---|---|
+| a `deleteFile=false` parameter | no parameter at all - the route cannot delete a file |
+| trusting the caller to delete children first | `409` when a folder still has descendants |
+| a `{itemId:guid}` route constraint | parse the id, `400` when it is malformed |
+
+The third is the least obvious and the most dangerous to get wrong. A `:guid` constraint
+makes a malformed id fail to *match the route*, and ASP.NET answers an unmatched route with
+`404` - which is precisely the signal the caller reads as "the plugin is not installed",
+sending it back to the stock route that does delete files. A bad request would have
+silently escalated into the operation this route exists to avoid.
+
+**Both `DeleteOptions` flags are written out**, including `DeleteFileLocation`, which the
+class already defaults to `false`. That class belongs to `MediaBrowser.Controller`, so its
+defaults are another project's implementation detail, not a promise to this one - and its
+constructor already sets the *other* field, which shows the file is a place where defaults
+get decided. The rule generalises: **where a default you rely on is owned by someone else,
+state it.** One assignment against the user's media library is not a close call.
+
+`DeleteFromExternalProvider = false` departs from the stock route deliberately. A stale
+entry is a bookkeeping fault, not a deletion; reporting it outward would push this side's
+error into a service that was right.
+
+**The permission check is thinner than it looks.** `item.CanDelete(user)` is kept, mirroring
+the stock controller, but the user comes from `IAuthorizationContext` - and an API-key
+caller has no user, so the check is skipped, exactly as upstream. What actually guards this
+route is `Policies.RequiresElevation` on the controller, which is stricter than the stock
+delete's plain `[Authorize]`.
+
+`Jellyfin.Api` is not on NuGet, so the upstream `User.GetUserId()` extension is unavailable
+to a plugin. `IAuthorizationContext` in `MediaBrowser.Controller.Net` provides the same two
+values - `User` and `IsApiKey` - from a package that is.
+
 ## Multi-targeting
 
 Jellyfin 10.11 runs on .NET 9, Jellyfin 12 on .NET 10. Because the target frameworks
