@@ -130,6 +130,44 @@ Three properties of the contract worth relying on:
   `/Movies/Ring2`. A trailing separator on the input is trimmed; a bare root is rejected
   with `400` rather than returning the entire library.
 
+### Removing an entry without touching the file
+
+```
+DELETE /JFLint/DeleteItemKeepFile/{itemId}
+```
+
+The only destructive route here, and the only one with no twin. It removes **one** library
+entry and leaves the media file exactly where it is. The stock `DELETE /Items/{itemId}`
+hardcodes `DeleteFileLocation = true` and does not expose the flag over HTTP, so clearing
+a stale entry - one whose file is already gone - otherwise meant using a route that can
+also delete media.
+
+| response | meaning |
+|---|---|
+| `204` | the entry is gone, the file is not |
+| `400` | the id is not a usable GUID |
+| `401` | the caller may not delete this item |
+| `409` | it is a folder that still has descendants |
+| `410` | no such item - already gone |
+| `404` | **the plugin is absent**, nothing else |
+
+Three properties are load-bearing:
+
+- **There is no parameter.** The route cannot delete a file at all, so there is nothing to
+  forget. A stale row that turns out to be fresh costs a rescan, not the media.
+- **`409`, not a recursive convenience.** `LibraryManager.DeleteItem` sends the item *and
+  every recursive descendant* to the repository as one batch, which is what trips the
+  `UserData` UNIQUE constraint of jellyfin#16120 - fixed in v12, not in 10.11.x. Delete
+  children first, deepest last, one call each; this route refuses rather than trusting the
+  caller to remember.
+- **`410` and `404` mean different things.** `410` is "the route ran, the item is gone" -
+  count it and carry on. `404` is "no such route" - fall back. Never conflate them: the
+  fallback is the stock route, which deletes files.
+
+Unlike the stock route this also passes `DeleteFromExternalProvider = false`. A stale entry
+is a bookkeeping fault, not a deletion, and an external service that was never wrong should
+not be told otherwise.
+
 ## Consuming them: the fallback chain
 
 A client should try the routes fastest-first and keep the old code path as the last

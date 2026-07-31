@@ -23,6 +23,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.4.0.0] / [12.4.0.0] - 2026-07-31
+
+### Added
+- `DELETE /JFLint/DeleteItemKeepFile/{itemId}`: removes one library entry and leaves the
+  media file where it is. The stock `DELETE /Items/{itemId}` hardcodes
+  `new DeleteOptions { DeleteFileLocation = true }` and the flag is not reachable over
+  HTTP, so a tool clearing a stale entry - one whose file is already gone - had no route
+  that could not also delete media. Three decisions make the safety structural rather
+  than conditional:
+  - **No parameter.** There is nothing to forget or mis-set; the route cannot delete a
+    file at all. A flag with one legal value is a flag somebody eventually makes
+    configurable.
+  - **`409` for a folder that still has descendants.** `LibraryManager.DeleteItem` hands
+    the item and every recursive descendant to the repository as one batch, and that
+    batch is what trips the `UserData` UNIQUE constraint of jellyfin#16120 - fixed in v12,
+    not in 10.11.x. Deleting children first was a caller convention; refusing here makes
+    it a guarantee.
+  - **The id is parsed, not route-constrained.** A `:guid` constraint would make a
+    malformed id miss the route, and ASP.NET answers a missing route with `404` - the
+    very signal a caller reads as "plugin absent", sending it back to the stock route
+    that deletes files. `400` for a bad id keeps `404` meaning one thing.
+- Both `DeleteOptions` flags are written out, including `DeleteFileLocation`, which the
+  class already defaults to `false`. That class belongs to `MediaBrowser.Controller`; its
+  defaults are that project's implementation detail, and its constructor already sets the
+  other field, so the file is demonstrably a place where defaults get decided. A release
+  lining it up with the controller that always passes `true` would turn this route into
+  the thing it exists to avoid, and nothing here would fail to compile.
+- `DeleteFromExternalProvider = false`, departing from the stock route: a stale entry is a
+  bookkeeping fault, not a deletion, and telling an external service otherwise would push
+  this side's error outward into one that was right.
+
 ## [11.3.0.1] / [12.3.0.1] - 2026-07-31
 
 ### Fixed
