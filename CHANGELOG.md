@@ -23,6 +23,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.3.0.1] / [12.3.0.1] - 2026-07-31
+
+### Fixed
+- `ItemsByPath` (the `ILibraryManager` twin) returned **500** on the reference library.
+  An unrestricted `GetItemList` dies with `InvalidOperationException: Cannot deserialize
+  unknown type` as soon as one row carries a `Type` that no longer resolves to a class -
+  a leftover from a plugin that was removed. Both routes now name the item kinds
+  explicitly, taken from `IItemTypeLookup.BaseItemKindNames`.
+- The restriction is applied to **both** routes on purpose, not only the one that
+  crashed: a row the object model cannot load is one the twin can never return, so
+  leaving the database route unrestricted would have made the pair disagree - and the
+  pair agreeing is this plugin's main quality mechanism. `ItemType` in the response is
+  now always a short name, never a fully qualified one.
+
 ## [11.3.0.0] / [12.3.0.0] - 2026-07-30
 
 ### Added

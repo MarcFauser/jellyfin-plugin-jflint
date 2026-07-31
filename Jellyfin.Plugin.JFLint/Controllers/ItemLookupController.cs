@@ -77,8 +77,15 @@ public class ItemLookupController(
 
         var prefix = target + SeparatorOf(target);
 
+        // IncludeItemTypes is not a narrowing of scope but a requirement. A library can
+        // hold rows whose Type no longer resolves to a class - leftovers from a plugin
+        // that was removed - and an unrestricted GetItemList dies on the first one with
+        // "Cannot deserialize unknown type". Naming every kind the server can name keeps
+        // those rows out of the deserializer, and keeps this route's answer identical to
+        // its database twin, which filters on the same set.
         var items = libraryManager.GetItemList(new InternalItemsQuery
         {
+            IncludeItemTypes = itemTypeLookup.BaseItemKindNames.Keys.ToArray(),
             Recursive = true,
             IsVirtualItem = false
         });
@@ -141,6 +148,11 @@ public class ItemLookupController(
 
         var shortNames = ShortTypeNames();
 
+        // Same restriction as the twin, for the same reason: a row whose type the server
+        // cannot name is one the twin can never return, and a pair that disagrees is worse
+        // than a pair that reports a little less.
+        var knownTypes = shortNames.Keys.ToArray();
+
         var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (dbContext.ConfigureAwait(false))
         {
@@ -154,6 +166,7 @@ public class ItemLookupController(
                 .AsNoTracking()
                 .Where(item => !item.IsVirtualItem
                                && item.Path != null
+                               && knownTypes.Contains(item.Type)
                                && (item.Path == target
                                    || (item.Path.CompareTo(lower) >= 0
                                        && item.Path.CompareTo(upper) < 0)))
@@ -163,7 +176,7 @@ public class ItemLookupController(
 
             var found = rows.Select(row => new PathItemDto(
                 row.Id,
-                shortNames.TryGetValue(row.Type, out var shortName) ? shortName : row.Type,
+                shortNames[row.Type],
                 row.Name,
                 row.Path));
 
