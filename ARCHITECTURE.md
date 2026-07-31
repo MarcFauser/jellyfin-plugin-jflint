@@ -238,6 +238,30 @@ state it.** One assignment against the user's media library is not a close call.
 entry is a bookkeeping fault, not a deletion; reporting it outward would push this side's
 error into a service that was right.
 
+### What is argued rather than measured
+
+**That the file survives is verified at the source, not on a server.** With
+`DeleteFileLocation = false` the branch containing every `File.Delete` is never entered -
+the guard is `(options.DeleteFileLocation && item.IsFileProtocol) || IsInternalItem(item)`,
+and `IsInternalItem` matches only Genre, MusicArtist, MusicGenre, Person, Studio and Year.
+Demonstrating it would need a throwaway file in a watched library and a control run of the
+stock route on a second copy; every library root on the reference server is a read-only
+mount, so neither half is possible there. Stated here rather than left to look tested.
+
+The same read-only mounts make one upstream behaviour worth knowing, because it is the
+opposite of what one would guess. `DeleteItemPath` rethrows `IOException` and
+`UnauthorizedAccessException` for the first path, which is always the required one, and the
+file deletion runs *before* the repository removal:
+
+| the item's file is | `DELETE /Items/{itemId}` on a read-only mount |
+|---|---|
+| already gone | nothing to delete, the entry is removed - works |
+| still there | throws, and **the entry stays** |
+
+So on such a mount the stock route cannot remove an entry whose file came back between the
+scan and the click - exactly the case this route exists for. `DeleteItemKeepFile` turns
+that failure into the intended outcome rather than merely being safer.
+
 **The permission check is thinner than it looks.** `item.CanDelete(user)` is kept, mirroring
 the stock controller, but the user comes from `IAuthorizationContext` - and an API-key
 caller has no user, so the check is skipped, exactly as upstream. What actually guards this
