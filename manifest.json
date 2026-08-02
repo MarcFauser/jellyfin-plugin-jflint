@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.7.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.7.0.0/jellyfin-plugin-jflint_12.7.0.0.zip",
+        "checksum": "5c3e5354de54cf91bc7fae59917254f7",
+        "changelog": "Every field a route declares is now sent on every row, null where unset. Jellyfin omits null properties from its JSON, so a field that applied to no row was missing entirely rather than present and empty - which a caller cannot tell apart from a field the plugin fails to send. Affects all response types, not just the one that prompted it.",
+        "timestamp": "2026-08-02T21:07:04Z"
+      },
+      {
         "version": "12.6.0.1",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.6.0.1/jellyfin-plugin-jflint_12.6.0.1.zip",
@@ -86,6 +94,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.7.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.7.0.0/jellyfin-plugin-jflint_11.7.0.0.zip",
+        "checksum": "c340388be889adaf4bfcbef5a56ccb40",
+        "changelog": "Every field a route declares is now sent on every row, null where unset. Jellyfin omits null properties from its JSON, so a field that applied to no row was missing entirely rather than present and empty - which a caller cannot tell apart from a field the plugin fails to send. Affects all response types, not just the one that prompted it.",
+        "timestamp": "2026-08-02T21:07:04Z"
       },
       {
         "version": "11.6.0.1",
