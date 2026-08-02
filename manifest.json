@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.6.0.1",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.6.0.1/jellyfin-plugin-jflint_12.6.0.1.zip",
+        "checksum": "d643d2e6193afcfed2e885fb1d171ecf",
+        "changelog": "Fixes the duplicate routes filtering empty strings differently on their two halves, which could have grouped unrelated rows into one bucket. Clarifies that the presentation-key branch of the movie identity groups files already linked as alternate versions and is not a fallback for movies without a provider id.",
+        "timestamp": "2026-08-02T15:28:43Z"
+      },
+      {
         "version": "12.6.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.6.0.0/jellyfin-plugin-jflint_12.6.0.0.zip",
@@ -78,6 +86,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.6.0.1",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.6.0.1/jellyfin-plugin-jflint_11.6.0.1.zip",
+        "checksum": "665ee5dfc3b046e143b3b71448546b7f",
+        "changelog": "Fixes the duplicate routes filtering empty strings differently on their two halves, which could have grouped unrelated rows into one bucket. Clarifies that the presentation-key branch of the movie identity groups files already linked as alternate versions and is not a fallback for movies without a provider id.",
+        "timestamp": "2026-08-02T15:28:43Z"
       },
       {
         "version": "11.6.0.0",
