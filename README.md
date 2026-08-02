@@ -130,6 +130,34 @@ Three properties of the contract worth relying on:
   `/Movies/Ring2`. A trailing separator on the input is trimmed; a bare root is rejected
   with `400` rather than returning the entire library.
 
+### The same content held twice
+
+```
+GET /JFLint/DuplicateEpisode      /DuplicateEpisodeDB
+GET /JFLint/DuplicateMovie        /DuplicateMovieDB
+```
+
+The only checks here that look **across** folders. `DuplicateEpisode` reports a (series,
+season, episode) covered by more than one real file; `DuplicateMovie` reports movie files
+sharing a TMDB id, else an IMDB id, else a `PresentationUniqueKey`.
+
+Both return **one row per file**, so a server-wide run yields roughly twice as many rows as
+there are affected slots. Group them on `SeriesKey` / `IdentityKey`, which the payload
+carries for exactly that purpose.
+
+- **`SeriesId` is not a usable key** and neither is the series name. Each folder of a
+  series is its own `Series` item, so `SeriesId` splits a multi-folder duplicate into
+  separate buckets; a name groups genuinely different shows together. The sound key,
+  `SeriesPresentationUniqueKey`, exists only as a database column.
+- **A split season is not a duplicate.** One season spread across folders by episode range
+  never produces a collision, so it stays silent by construction rather than by exception.
+- **Movie duplicates are often wanted** - 1080p beside 2160p, cut beside uncut. The route
+  reports and does not accuse; `Size`, `Width`, `Height` and `PrimaryVersionId` are what let
+  a caller tell a deliberate second copy from a real duplicate, and both from a
+  mis-identification where unrelated films landed on one provider id.
+- **Virtual items never participate.** They carry no file, so they cannot be a copy of
+  anything.
+
 ### Removing an entry without touching the file
 
 ```

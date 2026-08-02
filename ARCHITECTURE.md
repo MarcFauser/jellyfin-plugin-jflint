@@ -205,6 +205,37 @@ versioned; it is a check, not a test suite.
 What it cannot tell us is whether the numbers are right. That needs the live server, and
 the request document carries the expected counts for exactly that comparison.
 
+## Duplicates: the first time the two lines actually diverged
+
+`DuplicateEpisode` and `DuplicateMovie` look across folders, where every other check looks
+at one folder against itself. The grouping key for episodes is
+`SeriesPresentationUniqueKey`, a column on `BaseItemEntity` with no counterpart in
+`BaseItemDto` - which is the whole reason the question cannot be asked over the stock API.
+
+`SeriesId` is not a substitute, and this was measured rather than argued: Death Note is
+held in two folders, so it is **two `Series` items with two `SeriesId`s** covering 37
+episode numbers twice. Supplying a `userId` merges the *series* - 1,596 series become 520 -
+but the episodes keep the `SeriesId` of the folder they live under, so a user-scoped query
+is no way around it either.
+
+**This pair is where the schema drift finally showed up.** `PrimaryVersionId` is a
+`string` column in 10.11 and a `Guid?` in v12; the net10.0 build simply refused to compile
+against the other line's shape. Every route here has carried the warning that
+`JellyfinDbContext` is not a promised plugin contract - this is the first case that proved
+it. The response normalises both to the same 32-character string, because a payload that
+changes shape with the server line would push the problem onto every caller.
+
+A quieter divergence in the same routes: `Width` and `Height` are `int?` on the entity and
+plain `int` on the object model. Left alone, the two routes would report `null` and `0` for
+the same unknown value and the pair would disagree on rows that are in fact identical. Both
+sides normalise zero to null.
+
+**Double episodes are a known blind spot.** `IndexNumberEnd` is not a column - it survives
+in the `Data` blob, which `ILibraryManager` deserialises and a column query cannot see. A
+file covering E01-E02 carries `IndexNumber = 1` alone and never collides with a separate
+E02. The object-model route could see it and deliberately does not: a pair that disagrees
+is worse than a pair with a blind spot that is written down.
+
 ## The one destructive route
 
 `DeleteItemKeepFile` is the only route here that changes anything, and the only one
