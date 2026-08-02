@@ -408,6 +408,37 @@ actually live in both branches.
 `[Authorize(Policy = Policies.RequiresElevation)]` on the controller: the responses
 contain absolute media paths, which is administrator-grade information.
 
+## The response shape is invariant, on purpose
+
+Jellyfin serializes every response with `DefaultIgnoreCondition = WhenWritingNull`
+(`src/Jellyfin.Extensions/Json/JsonDefaults.cs`). A null property is therefore **not**
+sent as `null` - it is missing from the JSON. Every nullable member of every DTO here
+carries `[JsonIgnore(Condition = JsonIgnoreCondition.Never)]` to opt out of that, so a
+field that is declared is always present.
+
+**Why it is worth deviating from the server's convention.** These routes have exactly one
+consumer, and the failure mode is silent on both sides: drop or rename a field and nothing
+fails to compile, the caller simply starts throwing on a property that is not there. It
+happened twice - `GroupSize`, then `PrimaryVersionId` - and the second time it cost a full
+handover round trip to diagnose, because *"the plugin does not send it"* and *"every value
+is null"* look identical from the outside.
+
+The shape was only ever *accidentally* stable. Measured 2026-08-02: `ProductionYear` was
+absent on 2 of 273 movie rows while every other field happened to be filled. And
+`LayoutFindingDto` is worse by design - one shape serves five finding kinds, so most of
+its fields are null for any given row.
+
+**Two things this deliberately is not.** It is not applied to `PrimaryVersionId` alone;
+that would leave the same trap on eight other fields and make one payload inconsistent
+with itself. And it is not done by registering `IConfigureOptions<JsonOptions>`, which
+would change the serialization of **every** response the server sends.
+
+What stays checkable without a consumer: `components.schemas.<Dto>.properties` in
+`GET /api-docs/openapi.json` is generated from the DTO and cannot drift from what the
+route sends. That is the only way to guard a field which has no value anywhere - the
+acceptance suite asserts the declared field list of both duplicate DTOs for exactly that
+reason.
+
 ## What is deliberately not here
 
 - **No jf-lint changes.** Rewriting `$scanEpisodesScript` belongs in that repository and
