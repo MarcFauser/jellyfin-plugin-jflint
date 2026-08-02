@@ -222,8 +222,13 @@ is no way around it either.
 `string` column in 10.11 and a `Guid?` in v12; the net10.0 build simply refused to compile
 against the other line's shape. Every route here has carried the warning that
 `JellyfinDbContext` is not a promised plugin contract - this is the first case that proved
-it. The response normalises both to the same 32-character string, because a payload that
-changes shape with the server line would push the problem onto every caller.
+it. A payload that changes shape with the server line would push the problem onto every
+caller, so both are reported as a `Guid?`: **the newer of the two shapes, not the older**.
+The 10.11 string holds an item id and parses; where it would not, the link is reported as
+absent rather than handed on in a form the caller cannot use.
+
+That direction is the point. Normalising onto the shape being replaced would have to be
+undone the day 10.11 support ends, and every caller written against it with it.
 
 A quieter divergence in the same routes: `Width` and `Height` are `int?` on the entity and
 plain `int` on the object model. Left alone, the two routes would report `null` and `0` for

@@ -371,24 +371,35 @@ public class DuplicateController(
     }
 
     /// <summary>
-    /// Normalises whatever the two Jellyfin lines store for the alternate-version link into
-    /// one shape.
+    /// Normalises whatever a Jellyfin line stores for the alternate-version link into a
+    /// <see cref="Guid"/>.
     /// </summary>
     /// <remarks>
-    /// <c>BaseItemEntity.PrimaryVersionId</c> is a <c>string</c> in 10.11 and a
-    /// <c>Guid?</c> in v12 - measured, the net10.0 build refused to compile against the
-    /// string form. The response must not change shape with the server line, so both are
-    /// reported as the same 32-character string an item id uses elsewhere.
+    /// <para>
+    /// Three shapes reach this method. <c>BaseItemEntity.PrimaryVersionId</c> is a
+    /// <c>string</c> in 10.11 and a <c>Guid?</c> in v12 - measured, the net10.0 build
+    /// refused to compile against the string form - while the object model holds a
+    /// <c>string</c> on both lines. The response is a <c>Guid?</c> regardless, because that
+    /// is what the field is becoming and a payload should not carry the older line's
+    /// storage decision forward.
+    /// </para>
+    /// <para>
+    /// The string form holds an item id, so it parses. A value that does not is reported as
+    /// absent rather than passed on in a shape the caller cannot use - it would mean the
+    /// column holds something this code does not understand, and inventing a link is worse
+    /// than admitting to none.
+    /// </para>
     /// </remarks>
     /// <param name="value">The raw link, of whichever type this line stores.</param>
-    /// <returns>The link as a string, or null when there is none.</returns>
-    private static string? VersionLink(object? value)
+    /// <returns>The link, or null when there is none.</returns>
+    private static Guid? VersionLink(object? value)
         => value switch
         {
-            null => null,
-            Guid guid => guid.Equals(Guid.Empty) ? null : guid.ToString("N"),
-            string text => string.IsNullOrEmpty(text) ? null : text,
-            _ => value.ToString()
+            Guid guid => guid.Equals(Guid.Empty) ? null : guid,
+            string text => Guid.TryParse(text, out var parsed) && !parsed.Equals(Guid.Empty)
+                ? parsed
+                : null,
+            _ => null
         };
 
     /// <summary>

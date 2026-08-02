@@ -27,8 +27,9 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// <param name="Height">Video height in pixels, null when unknown.</param>
 /// <param name="PrimaryVersionId">
 /// Set when the item is already linked as an alternate version of another - a settled
-/// decision rather than an open one. A string rather than a Guid because that is what both
-/// the column and the object model hold.
+/// decision rather than an open one. Reported as a <c>Guid</c> on both Jellyfin lines,
+/// although 10.11 still stores it as a string: the field is a Guid in v12, and the payload
+/// follows where the schema is going rather than where it has been.
 /// </param>
 public sealed record DuplicateEpisodeDto(
     Guid Id,
@@ -41,4 +42,4 @@ public sealed record DuplicateEpisodeDto(
     long? Size,
     int? Width,
     int? Height,
-    string? PrimaryVersionId);
+    Guid? PrimaryVersionId);

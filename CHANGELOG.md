@@ -44,11 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   are the other half of the same defect rather than a copy of anything.
 
 ### Fixed
-- `PrimaryVersionId` is reported as a **string on both Jellyfin lines**. It is a `string`
+- `PrimaryVersionId` is reported as a **`Guid?` on both Jellyfin lines**. It is a `string`
   column in 10.11 and a `Guid?` in v12 - found because the net10.0 build refused to
-  compile against the 10.11 shape. This is the first measured instance of the schema drift
-  the dual-route design exists to survive, and the response must not change shape with the
-  server line.
+  compile against the 10.11 shape - while the object model holds a string on both. This is
+  the first measured instance of the schema drift the dual-route design exists to survive.
+  The payload follows where the field is going rather than where it has been, so the 10.11
+  string is parsed; a value that will not parse is reported as absent rather than passed on
+  in a shape a caller cannot use.
 - `Width` and `Height` are normalised so that zero reads as null. The column is nullable
   and the object model is not, so without it the two routes would report `null` and `0`
   for the same unknown value and the pair would disagree on identical rows.
