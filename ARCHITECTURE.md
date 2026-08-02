@@ -241,6 +241,35 @@ file covering E01-E02 carries `IndexNumber = 1` alone and never collides with a 
 E02. The object-model route could see it and deliberately does not: a pair that disagrees
 is worse than a pair with a blind spot that is written down.
 
+### Measured, 2026-08-02
+
+| route | `…DB` | `ILibraryManager` | rows | groups |
+|---|---:|---:|---:|---:|
+| `DuplicateEpisode` | 142 ms | 2.87 s | 1,598 | 701 |
+| `DuplicateMovie` | 108 ms | 656 ms | 273 | 124 |
+
+Both pairs agree item by item. **Death Note comes back as 74 rows across 37 numbers under
+a single `SeriesKey`** - where `SeriesId` gives two. That one line is the entire argument
+for the route.
+
+Two independent estimates existed beforehand, both built on a `SeriesName` proxy, and the
+measurement differs from each in a direction that explains itself:
+
+- **Episodes came in lower** (1,598 / 701 against ~1,700 / ~750) because the proxy
+  over-grouped series that merely share a title. *Infiltration* is the case that was
+  checked by hand: two shows of that name, reported by the proxy, **absent here**.
+- **Movies came in higher** (273 / 124 against 250 / 119) because the estimate counted TMDB
+  ids only. Grouped by source: `Tmdb:` 250 rows in 119 groups - matching it exactly - plus
+  `Imdb:` 23 rows in 5 groups that a TMDB-only count cannot see.
+- **`Key:` produced 0 groups**, as a review predicted from the source: an unlinked movie's
+  presentation key is its own item id.
+
+**One property could not be exercised.** `PrimaryVersionId` came back null on all 1,871
+rows - but the control is null too: no movie and no episode in this library has more than
+one `MediaSource`, so nothing is linked as an alternate version anywhere. The field is
+therefore correct-by-vacuity, and the string-to-`Guid` parse on 10.11 remains **unverified**
+rather than proven. It is on the v12 checklist for that reason.
+
 ## The one destructive route
 
 `DeleteItemKeepFile` is the only route here that changes anything, and the only one
