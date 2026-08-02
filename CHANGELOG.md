@@ -23,6 +23,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.6.0.0] / [12.6.0.0] - 2026-08-02
+
+### Added
+- `DuplicateEpisode` / `DuplicateEpisodeDB`: every episode file whose (series, season,
+  episode) is covered by more than one real file. Grouped on
+  `SeriesPresentationUniqueKey`, which is a column on `BaseItemEntity` and absent from
+  `BaseItemDto` - the reason this cannot be asked over the stock API at all. Grouping on
+  `SeriesId` instead loses precisely the case that matters: each folder of a series is its
+  own `Series` item, and an episode keeps its folder's `SeriesId` even in a merged,
+  user-scoped view.
+- `DuplicateMovie` / `DuplicateMovieDB`: movie files sharing an identity - TMDB id, else
+  IMDB id, else `PresentationUniqueKey`. No name-and-year fallback: the library holds
+  genuinely distinct films with the same title, and a false positive costs more than a
+  miss. Duplicates here are often wanted (1080p beside 2160p, cut beside uncut), so the
+  payload carries size, resolution and the version link and leaves the judgement to the
+  caller.
+- Both pairs return **one row per file**, not per group, so the row count is roughly twice
+  the number of affected slots. Virtual items never participate: they carry no file and
+  are the other half of the same defect rather than a copy of anything.
+
+### Fixed
+- `PrimaryVersionId` is reported as a **string on both Jellyfin lines**. It is a `string`
+  column in 10.11 and a `Guid?` in v12 - found because the net10.0 build refused to
+  compile against the 10.11 shape. This is the first measured instance of the schema drift
+  the dual-route design exists to survive, and the response must not change shape with the
+  server line.
+- `Width` and `Height` are normalised so that zero reads as null. The column is nullable
+  and the object model is not, so without it the two routes would report `null` and `0`
+  for the same unknown value and the pair would disagree on identical rows.
+
+### Known limitation
+- Double episodes are invisible to both routes. `IndexNumberEnd` is not a column on
+  `BaseItemEntity` - it lives in the `Data` blob, which `ILibraryManager` deserialises and
+  a column query cannot see. A file covering E01-E02 therefore carries `IndexNumber = 1`
+  alone and never collides with a separate E02. The object-model route *could* see it; it
+  deliberately does not, because a pair that disagrees is worse than a pair with a written
+  down blind spot.
+
 ## [11.5.0.0] / [12.5.0.0] - 2026-07-31
 
 ### Changed
