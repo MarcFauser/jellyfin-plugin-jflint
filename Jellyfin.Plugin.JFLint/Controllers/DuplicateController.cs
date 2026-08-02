@@ -125,9 +125,9 @@ public class DuplicateController(
                 .AsNoTracking()
                 .Where(episode => episode.Type == episodeType
                                   && !episode.IsVirtualItem
-                                  && episode.Path != null
+                                  && !string.IsNullOrEmpty(episode.Path)
                                   && episode.IndexNumber != null
-                                  && episode.SeriesPresentationUniqueKey != null)
+                                  && !string.IsNullOrEmpty(episode.SeriesPresentationUniqueKey))
                 .GroupBy(episode => new
                 {
                     episode.SeriesPresentationUniqueKey,
@@ -156,7 +156,7 @@ public class DuplicateController(
                 .AsNoTracking()
                 .Where(episode => episode.Type == episodeType
                                   && !episode.IsVirtualItem
-                                  && episode.Path != null
+                                  && !string.IsNullOrEmpty(episode.Path)
                                   && episode.IndexNumber != null
                                   && seriesKeys.Contains(episode.SeriesPresentationUniqueKey))
                 .Select(episode => new
@@ -277,7 +277,7 @@ public class DuplicateController(
                 .AsNoTracking()
                 .Where(movie => movie.Type == movieType
                                 && !movie.IsVirtualItem
-                                && movie.Path != null)
+                                && !string.IsNullOrEmpty(movie.Path))
                 .Select(movie => new
                 {
                     movie.Id,
@@ -408,7 +408,15 @@ public class DuplicateController(
     /// </summary>
     /// <param name="tmdb">The TMDB id, if any.</param>
     /// <param name="imdb">The IMDB id, if any.</param>
-    /// <param name="presentationUniqueKey">Jellyfin's own key, as the last resort.</param>
+    /// <param name="presentationUniqueKey">
+    /// Jellyfin's own key. <b>Not a fallback for movies without a provider id</b>, despite
+    /// appearances: <c>Video.CreatePresentationUniqueKey()</c> returns
+    /// <c>PrimaryVersionId</c> when one is set and otherwise the item's own id, so for any
+    /// unlinked movie this key is unique by construction and can never collide. It groups
+    /// exactly one population - files already linked as alternate versions of each other -
+    /// and even those usually carry a TMDB id and are taken by the first branch. Movies
+    /// with no provider id at all are simply not reported.
+    /// </param>
     /// <returns>The prefixed key, or null when the row cannot be identified at all.</returns>
     private static string? IdentityKey(string? tmdb, string? imdb, string? presentationUniqueKey)
     {

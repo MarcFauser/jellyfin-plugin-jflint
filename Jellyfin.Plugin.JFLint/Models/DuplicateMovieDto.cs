@@ -17,7 +17,9 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// <param name="IdentityKey">
 /// Which key grouped this row, prefixed with its source - <c>Tmdb:1892</c>,
 /// <c>Imdb:tt0088763</c> or <c>Key:…</c>. Named rather than implied, so a caller can see
-/// whether a group rests on a provider id or on the weaker fallback.
+/// what a group rests on. A <c>Key:</c> group means the files are already linked as
+/// alternate versions of one another; it is not a catch-all for movies without a provider
+/// id, since an unlinked movie's presentation key is its own item id and cannot collide.
 /// </param>
 /// <param name="Path">The file on disk.</param>
 /// <param name="Size">File size in bytes.</param>

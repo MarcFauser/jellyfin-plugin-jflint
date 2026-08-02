@@ -23,6 +23,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.6.0.1] / [12.6.0.1] - 2026-08-02
+
+### Fixed
+- The two duplicate routes filtered **empty strings** differently: the object-model side
+  used `string.IsNullOrEmpty`, the database side only `!= null`. An empty
+  `SeriesPresentationUniqueKey` would therefore be dropped by one twin and kept by the
+  other, where it would group every such episode into one bucket and report the lot as
+  duplicates of each other - the precise failure the pair exists to make impossible. This
+  is the same shape already recorded for `DuplicateSeasonNumber` and `Guid.Empty`; the
+  lesson was in the project and did not reach this file.
+- Reported by review at one site; **three** existed. `Path` had the same split in both the
+  episode and the movie query. All now read `!string.IsNullOrEmpty(...)` on both sides, in
+  the same words, so a reader comparing the twins sees one predicate rather than two that
+  happen to agree.
+
+### Changed
+- Documented what the `Key:` branch of the movie identity actually does.
+  `Video.CreatePresentationUniqueKey()` returns `PrimaryVersionId` when one is set and the
+  item's **own id** otherwise, so for an unlinked movie the key is unique by construction
+  and cannot collide. The branch groups exactly one population - files already linked as
+  alternate versions - and is **not** a fallback for the 118 movies here that carry no
+  provider id at all. Those are simply not reported. The branch is kept because that one
+  population is real; only the description was wrong.
+
 ## [11.6.0.0] / [12.6.0.0] - 2026-08-02
 
 ### Added
