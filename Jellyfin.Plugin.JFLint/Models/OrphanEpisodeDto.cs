@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.JFLint.Models;
 
@@ -15,8 +16,8 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// <param name="Path">The path of the episode's media file.</param>
 public sealed record OrphanEpisodeDto(
     Guid Id,
-    Guid? SeriesId,
-    string? SeriesName,
-    int? IndexNumber,
-    string? Name,
-    string? Path);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] Guid? SeriesId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SeriesName,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? IndexNumber,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Name,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Path);

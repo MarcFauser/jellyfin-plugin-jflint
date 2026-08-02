@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.JFLint.Models;
 
@@ -17,5 +18,5 @@ namespace Jellyfin.Plugin.JFLint.Models;
 public sealed record PathItemDto(
     Guid Id,
     string ItemType,
-    string? Name,
-    string? Path);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Name,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Path);

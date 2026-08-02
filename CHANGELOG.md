@@ -23,6 +23,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.7.0.0] / [12.7.0.0] - 2026-08-02
+
+### Changed
+- **Every nullable field is now always present in the payload.** Jellyfin serializes with
+  `DefaultIgnoreCondition = WhenWritingNull`, so a null field was not sent as `null` - it
+  was absent from the JSON entirely. All 35 nullable members across the six DTOs now carry
+  `[JsonIgnore(Condition = JsonIgnoreCondition.Never)]`, which overrides that per property
+  (measured against Jellyfin's own options before shipping, with a control run without the
+  global condition). The response shape is therefore the same for every row of every route.
+- Why this is worth a behaviour change: the shape was only *accidentally* stable. On this
+  library `ProductionYear` was already absent on 2 of 273 movie rows while every other
+  field happened to be filled, so a consumer reading a field directly worked until it hit
+  one of those two. `LayoutFindingDto` is the sharper case - four of its five finding kinds
+  leave most fields null **by design**, and `GroupSize` is exactly the field that took the
+  companion tool down. A caller under `Set-StrictMode` throws on a property that is not
+  there, and nothing on either side fails to compile when it disappears.
+- Deliberately applied to all six DTOs rather than to `PrimaryVersionId` alone. Fixing the
+  one field that prompted this would have left the same trap on eight others and made one
+  payload inconsistent with itself.
+- **Not** done by registering `IConfigureOptions<JsonOptions>`: that would change the
+  serialization of every response the server sends, not just this plugin's.
+
 ## [11.6.0.1] / [12.6.0.1] - 2026-08-02
 
 ### Fixed

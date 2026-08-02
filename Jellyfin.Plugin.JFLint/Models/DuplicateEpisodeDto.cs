@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.JFLint.Models;
 
@@ -33,13 +34,13 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// </param>
 public sealed record DuplicateEpisodeDto(
     Guid Id,
-    string? SeriesName,
-    string? SeriesKey,
-    int? SeasonNumber,
-    int? EpisodeNumber,
-    string? Name,
-    string? Path,
-    long? Size,
-    int? Width,
-    int? Height,
-    Guid? PrimaryVersionId);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SeriesName,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? SeriesKey,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? SeasonNumber,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? EpisodeNumber,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Name,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Path,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] long? Size,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? Width,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? Height,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] Guid? PrimaryVersionId);
