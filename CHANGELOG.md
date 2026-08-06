@@ -23,6 +23,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.9.0.0] / [12.9.0.0] - 2026-08-06
+
+### Fixed
+- **`11.8.0.0` cleared the wrong instance.** It nulled the physical library folders returned
+  by `CollectionFolder.GetPhysicalFolders(true)`, which resolves them through `GetItemById`.
+  A user-less query does not walk those. `ItemsController` calls
+  `GetParentItem(null, null)`, which returns `LibraryManager.RootFolder` - the
+  `AggregateFolder` - and `AggregateFolder.LoadChildren()` uses `base.LoadChildren()` on its
+  first call, so its `_children` holds **repository-built** physical folder objects that were
+  never registered anywhere. The divergence is not below the physical library folder; it
+  **is** the physical library folder.
+- Both are cleared now. `DeleteItemKeepFile` and `ForgetCachedChildren` additionally null
+  `RootFolder.Children`, which is also what makes the two views converge: the aggregate root
+  has recorded its child ids by then, so its next load resolves them through `GetItemById` -
+  the same objects the collection folders use.
+
+### How the mistake was caught, since it is the useful part
+- The measurement that prompted `11.8.0.0` was sound but was read one level too low. What
+  settled it afterwards was a check the fix itself invited: **all three parents turned out to
+  be physical library folders**, which meant Jellyfin's own `DeleteItem` had already nulled
+  exactly what `11.8.0.0` set out to null. A fix that does what the broken code already does
+  cannot work, and that contradiction is what sent the reading back to the source.
+- A wrong turn on the way, recorded because it looked convincing: the non-recursive
+  `ParentId=` probe was briefly taken for a SQL query, which would have made the whole
+  experiment meaningless. `Folder.GetItemsInternal` line 1000 reads
+  `items = Children.Where(filter)` when there is no user - it is served from memory as well,
+  so the comparison held.
+
 ## [11.8.0.0] / [12.8.0.0] - 2026-08-06
 
 ### Fixed

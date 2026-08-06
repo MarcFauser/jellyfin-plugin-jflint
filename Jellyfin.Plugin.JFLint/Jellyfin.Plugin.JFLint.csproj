@@ -52,15 +52,15 @@
        update; with equal numbers it would silently keep running the net9.0 assembly.
        Bump the third part for fixes within a line. -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <Version>11.8.0.0</Version>
-    <AssemblyVersion>11.8.0.0</AssemblyVersion>
-    <FileVersion>11.8.0.0</FileVersion>
+    <Version>11.9.0.0</Version>
+    <AssemblyVersion>11.9.0.0</AssemblyVersion>
+    <FileVersion>11.9.0.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <Version>12.8.0.0</Version>
-    <AssemblyVersion>12.8.0.0</AssemblyVersion>
-    <FileVersion>12.8.0.0</FileVersion>
+    <Version>12.9.0.0</Version>
+    <AssemblyVersion>12.9.0.0</AssemblyVersion>
+    <FileVersion>12.9.0.0</FileVersion>
   </PropertyGroup>
 
   <!-- ExcludeAssets="runtime": the server ships these assemblies itself, the plugin

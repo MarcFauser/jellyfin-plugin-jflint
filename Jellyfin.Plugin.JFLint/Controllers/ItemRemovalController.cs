@@ -159,12 +159,18 @@ public class ItemRemovalController(
 
         // DeleteItem nulls the children of the parent it resolved by id, which is not the
         // instance a user-less query walks - so without this the row is gone from the
-        // database and still answered from memory until the server restarts. See
-        // FolderChildrenCache for the measurement behind that claim.
+        // database and still answered from memory until the server restarts.
+        //
+        // Both steps are needed, and the second is the one that reaches the query: the
+        // aggregate root keeps its OWN objects for the physical library folders, so
+        // clearing the one resolved by id leaves the walked instance untouched. See
+        // FolderChildrenCache.
         if (libraryRoot is not null)
         {
             libraryRoot.Children = null;
         }
+
+        FolderChildrenCache.DetachAggregateRoot(libraryManager);
 
         return NoContent();
     }
