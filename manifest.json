@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.9.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.9.0.0/jellyfin-plugin-jflint_12.9.0.0.zip",
+        "checksum": "ec1759f3ccade70928531ada505ffc14",
+        "changelog": "Corrects 11.8.0.0, which cleared the wrong copy of the library folders. A query made without a user context is answered from the aggregate root, and that keeps its own objects for those folders rather than the ones reached by id - so the previous release dropped a listing nothing was reading. Both are dropped now, which also brings the two views back onto one set of objects.",
+        "timestamp": "2026-08-06T17:05:30Z"
+      },
+      {
         "version": "12.8.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.8.0.0/jellyfin-plugin-jflint_12.8.0.0.zip",
@@ -102,6 +110,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.9.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.9.0.0/jellyfin-plugin-jflint_11.9.0.0.zip",
+        "checksum": "298f86a7acb05a593f36923799a3fca7",
+        "changelog": "Corrects 11.8.0.0, which cleared the wrong copy of the library folders. A query made without a user context is answered from the aggregate root, and that keeps its own objects for those folders rather than the ones reached by id - so the previous release dropped a listing nothing was reading. Both are dropped now, which also brings the two views back onto one set of objects.",
+        "timestamp": "2026-08-06T17:05:30Z"
       },
       {
         "version": "11.8.0.0",
