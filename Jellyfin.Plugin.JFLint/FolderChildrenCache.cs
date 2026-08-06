@@ -33,13 +33,27 @@ namespace Jellyfin.Plugin.JFLint;
 /// still present in the walk from the root.
 /// </para>
 /// <para>
-/// <b>The one place the two agree.</b> <c>CollectionFolder.GetPhysicalFolders</c> resolves
-/// its folders with <c>LibraryManager.GetItemById</c>, so for a physical library folder the
-/// instance reachable by id <i>is</i> the instance the root walk descends into. Nulling its
-/// children detaches the whole stale subtree below it in one assignment, and everything
-/// under it reloads lazily. That is why nothing here walks the tree downwards: enumerating
-/// <c>Children</c> to find folders would <i>populate</i> them, loading the library into
-/// memory in order to throw it away.
+/// <b>Where the second instance comes from, and it is higher up than it looks.</b> A
+/// user-less query does not start at the user root: <c>ItemsController</c> asks
+/// <c>GetParentItem(null, null)</c>, which returns <c>LibraryManager.RootFolder</c> - the
+/// <c>AggregateFolder</c>. And <c>AggregateFolder.LoadChildren()</c> takes
+/// <c>base.LoadChildren()</c> the first time it is called, so its <c>_children</c> holds
+/// <b>repository-built physical folder objects</b>; only a later reload resolves them by id.
+/// <c>CollectionFolder.GetPhysicalFolders(true)</c> meanwhile uses
+/// <c>LibraryManager.GetItemById</c>. So the divergence is not below the physical library
+/// folder - it <b>is</b> the physical library folder.
+/// </para>
+/// <para>
+/// Both therefore have to be cleared: the instances reachable by id, and the aggregate root
+/// that holds the others. Nulling <c>RootFolder.Children</c> is also what makes the two
+/// views converge, because the aggregate root has recorded its child ids by then and its
+/// next load resolves them through <c>GetItemById</c> - the same objects the collection
+/// folders use.
+/// </para>
+/// <para>
+/// Nothing here walks the tree downwards: the <c>Children</c> getter <i>populates</i>, so
+/// enumerating it to find folders would load the library into memory in order to throw it
+/// away.
 /// </para>
 /// <para>
 /// <b>Concurrency.</b> Assigning <c>null</c> while another request enumerates the list is
@@ -63,7 +77,25 @@ internal static class FolderChildrenCache
             root.Children = null;
         }
 
+        DetachAggregateRoot(libraryManager);
         return roots.Values.ToList();
+    }
+
+    /// <summary>
+    /// Drops the aggregate root's own list of physical folders.
+    /// </summary>
+    /// <param name="libraryManager">The library manager.</param>
+    /// <remarks>
+    /// The step that actually reaches a user-less query. Clearing the folders returned by
+    /// <c>GetItemById</c> is not enough on its own, because the aggregate root holds
+    /// <b>different objects</b> for them - see the remarks on this class. Its next load
+    /// resolves the ids it has already recorded through <c>GetItemById</c>, so afterwards
+    /// both views share one set of instances.
+    /// </remarks>
+    public static void DetachAggregateRoot(ILibraryManager libraryManager)
+    {
+        ArgumentNullException.ThrowIfNull(libraryManager);
+        libraryManager.RootFolder.Children = null;
     }
 
     /// <summary>

@@ -447,12 +447,40 @@ The second path calls the repository **directly**, so what it builds is never ha
 into the other. The last row of the table above is what turns that from a reading of the
 source into a measurement.
 
-### The lever
+### The lever - and the level, which `11.8.0.0` got wrong
 
-`CollectionFolder.GetPhysicalFolders` resolves with `LibraryManager.GetItemById`, so for a
-**physical library folder** - and only there - the instance reachable by id is the instance
-the root walk descends into. Nulling its children detaches the entire stale subtree in one
-assignment, and everything below reloads lazily.
+`11.8.0.0` nulled the folders from `CollectionFolder.GetPhysicalFolders(true)`, reasoning
+that `GetItemById` reaches the instance the walk uses. **It does not.** A user-less query
+starts at `LibraryManager.RootFolder`, because `ItemsController` calls
+`GetParentItem(null, null)` and that returns the `AggregateFolder` - line 285's
+`GetUserRootFolder()` is the fallback for a parent that is not a folder, not the path taken.
+
+```csharp
+protected override IReadOnlyList<BaseItem> LoadChildren()      // AggregateFolder.cs
+{
+    if (_childrenIds is null || _childrenIds.Length == 0)
+    {
+        var list = base.LoadChildren();          // repository objects, registered nowhere
+        _childrenIds = list.Select(i => i.Id).ToArray();
+        return list;
+    }
+
+    return _childrenIds.Select(LibraryManager.GetItemById)…;
+}
+```
+
+Combined with `_children ??= LoadChildren()`, the aggregate root keeps its **own** objects
+for the physical library folders. So the divergence is not below the physical folder - it
+**is** the physical folder, and `11.8.0.0` cleared the twin nobody walks.
+
+What gave it away was a consequence of the fix rather than a new experiment: all three
+parents turned out to be physical library folders, so Jellyfin's `DeleteItem` had already
+nulled precisely what the fix nulled. **A fix that does what the broken code already does
+cannot work** - and that is a cheap thing to check on any fix that mirrors an existing line.
+
+From `11.9.0.0` both are cleared. Nulling `RootFolder.Children` also makes the two views
+converge, because the aggregate root has its child ids by then and resolves them through
+`GetItemById` on the next load.
 
 Hence two entry points over one helper (`FolderChildrenCache`):
 
