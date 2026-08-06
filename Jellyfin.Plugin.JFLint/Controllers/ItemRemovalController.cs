@@ -137,6 +137,10 @@ public class ItemRemovalController(
             }
         }
 
+        // Resolved BEFORE the delete: DeleteItem runs item.SetParent(null), and after that
+        // the ancestors cannot be reached from the item any more.
+        var libraryRoot = FolderChildrenCache.FindLibraryRoot(libraryManager, item);
+
         // Both flags are written out, including the one the class already defaults to.
         // DeleteOptions belongs to MediaBrowser.Controller, and its defaults are that
         // project's implementation detail, not a promise to this one - its constructor
@@ -152,6 +156,15 @@ public class ItemRemovalController(
             item,
             new DeleteOptions { DeleteFileLocation = false, DeleteFromExternalProvider = false },
             notifyParentItem: true);
+
+        // DeleteItem nulls the children of the parent it resolved by id, which is not the
+        // instance a user-less query walks - so without this the row is gone from the
+        // database and still answered from memory until the server restarts. See
+        // FolderChildrenCache for the measurement behind that claim.
+        if (libraryRoot is not null)
+        {
+            libraryRoot.Children = null;
+        }
 
         return NoContent();
     }

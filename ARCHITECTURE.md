@@ -408,6 +408,63 @@ actually live in both branches.
 `[Authorize(Policy = Policies.RequiresElevation)]` on the controller: the responses
 contain absolute media paths, which is administrator-grade information.
 
+## The one mutation that is not a route pair
+
+`POST /JFLint/ForgetCachedChildren` breaks the `X` / `XDB` convention, and the deviation is
+a decision rather than an oversight: the pair exists so each half is the other's control,
+which is worth something for a question with a comparable answer. Running a **mutation**
+twice by two routes doubles the effect instead of checking it.
+
+### Why it is needed at all
+
+An item removed from the database kept being answered from memory until the server was
+restarted. Measured on 10.11.11 over three stranded entries:
+
+| asked | answer |
+|---|---|
+| `ItemsByPathDB` | `[]` - gone from the database |
+| `/Items?Recursive=true&IncludeItemTypes=Series` **with** `userId` | absent |
+| the same **without** `userId` | **present** |
+| `/Items?ParentId=<their parent>` (no `userId`) | **absent**, while 37 / 295 / 288 live siblings came back |
+
+The query shape decides it, not the item: with a user, or for a single type, the answer
+comes from SQL; the combined user-less query is post-filtered in memory by
+`Folder.AddChildrenToList`, which walks `Children` along **object references** only.
+
+### The cause, which is not where it looks
+
+`LibraryManager.DeleteItem` ends with `if (parent is Folder folder) { folder.Children = null; }`
+and it does run - all three parents resolved to a real `Folder`. It has no effect because
+the two sides use different objects for the same id:
+
+| | resolved by |
+|---|---|
+| `item.GetParent()`, hence `DeleteItem`'s `parent` | `LibraryManager.GetItemById` - LRU, else retrieved and registered |
+| a folder's own `_children` | `Folder.LoadChildren()` → `GetCachedChildren()` → `ItemRepository.GetItemList(...)` |
+
+The second path calls the repository **directly**, so what it builds is never handed to
+`RegisterItem` and never enters the cache. Jellyfin nulls one instance; the walk descends
+into the other. The last row of the table above is what turns that from a reading of the
+source into a measurement.
+
+### The lever
+
+`CollectionFolder.GetPhysicalFolders` resolves with `LibraryManager.GetItemById`, so for a
+**physical library folder** - and only there - the instance reachable by id is the instance
+the root walk descends into. Nulling its children detaches the entire stale subtree in one
+assignment, and everything below reloads lazily.
+
+Hence two entry points over one helper (`FolderChildrenCache`):
+
+- `DeleteItemKeepFile` clears the library root of the item it removed, resolved **before**
+  the delete because `DeleteItem` runs `item.SetParent(null)`.
+- `ForgetCachedChildren` clears them all, for entries stranded earlier or removed by a route
+  that does not know about this - the stock `DELETE /Items/{itemId}` among them.
+
+Nothing walks the tree downwards on purpose: the `Children` getter *populates*, so
+enumerating folders to find them would load the library into memory in order to throw it
+away.
+
 ## The response shape is invariant, on purpose
 
 Jellyfin serializes every response with `DefaultIgnoreCondition = WhenWritingNull`

@@ -23,6 +23,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.8.0.0] / [12.8.0.0] - 2026-08-06
+
+### Fixed
+- **A removed entry kept being answered from memory until the server was restarted.**
+  `DeleteItemKeepFile` now also drops the cached children of the physical library folder the
+  item sat under. Measured on 10.11.11 over three stranded entries: present in
+  `GET /Items?Recursive=true&IncludeItemTypes=Series` **without** a `userId`, absent with
+  one, and absent from the database. A caller could not tell a removal that worked from one
+  that failed, and re-listed the same rows on every scan.
+- The cause is not the obvious one, so it is written down where the code is. Jellyfin's own
+  `DeleteItem` ends with `if (parent is Folder folder) { folder.Children = null; }` and that
+  runs - all three parents resolved. It has no effect because the parent comes from
+  `GetItemById` (LRU or freshly retrieved) while a folder's own children come from
+  `Folder.LoadChildren()` → `GetCachedChildren()` → `ItemRepository.GetItemList(...)`, which
+  bypasses the library manager and registers nothing. **Two instances per id**: Jellyfin
+  nulls one, `AddChildrenToList` walks the other along object references. Measured rather
+  than reasoned - the three entries were absent from `GET /Items?ParentId=<their parent>`,
+  which resolves that parent by id, while still present in the walk from the root.
+- The lever is `CollectionFolder.GetPhysicalFolders`, which resolves through `GetItemById`:
+  for a physical library folder the instance reachable by id **is** the one the root walk
+  descends into, so one assignment detaches the whole stale subtree.
+
+### Added
+- `POST /JFLint/ForgetCachedChildren`: drops the cached children of every physical library
+  folder, for entries stranded before the fix above or removed by a route that does not know
+  about it. Returns the folders it cleared rather than a count.
+- No path or id parameter, deliberately: the entries this clears are precisely the ones the
+  database no longer holds, so neither resolves to anything. There is nothing to aim with,
+  and narrowing it would mean deriving an ancestor from a path as a string.
+- **Not** a route pair. `X`/`XDB` exists so each half is the other's control, which suits a
+  question with a comparable answer; running a mutation twice would double it, not check it.
+
 ## [11.7.0.0] / [12.7.0.0] - 2026-08-02
 
 ### Changed
