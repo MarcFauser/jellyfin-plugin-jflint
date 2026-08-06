@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.8.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.8.0.0/jellyfin-plugin-jflint_12.8.0.0.zip",
+        "checksum": "05dbba5a2ce4e35ef7a93bd808fe14e1",
+        "changelog": "A library entry removed through the plugin no longer keeps turning up in queries until the server is restarted. Jellyfin drops its cached folder listing for the parent it resolves by id, which is a different object from the one a user-less query actually walks, so the removal succeeded and the entry stayed visible. Adds POST /JFLint/ForgetCachedChildren to clear entries stranded that way earlier, or by a route that knows nothing about this.",
+        "timestamp": "2026-08-06T16:26:07Z"
+      },
+      {
         "version": "12.7.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.7.0.0/jellyfin-plugin-jflint_12.7.0.0.zip",
@@ -94,6 +102,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.8.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.8.0.0/jellyfin-plugin-jflint_11.8.0.0.zip",
+        "checksum": "1d903649d65f6360954a56e73998ca96",
+        "changelog": "A library entry removed through the plugin no longer keeps turning up in queries until the server is restarted. Jellyfin drops its cached folder listing for the parent it resolves by id, which is a different object from the one a user-less query actually walks, so the removal succeeded and the entry stayed visible. Adds POST /JFLint/ForgetCachedChildren to clear entries stranded that way earlier, or by a route that knows nothing about this.",
+        "timestamp": "2026-08-06T16:26:07Z"
       },
       {
         "version": "11.7.0.0",
