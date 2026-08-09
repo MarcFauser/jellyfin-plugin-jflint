@@ -53,6 +53,7 @@ public class LibraryLayoutController(
     private const string SeriesTypeName = nameof(BaseItemKind.Series);
     private const string SeasonTypeName = nameof(BaseItemKind.Season);
     private const string EpisodeTypeName = nameof(BaseItemKind.Episode);
+    private const string MovieTypeName = nameof(BaseItemKind.Movie);
 
     // Likewise for the link names reported by OrphanedItem: taken from the columns they
     // name, not from string literals.
@@ -113,6 +114,17 @@ public class LibraryLayoutController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyList<LayoutFindingDto>> GetOrphanedItems()
         => Ok(FindingsOfKind(LayoutFindingKind.OrphanedItem));
+
+    /// <summary>
+    /// Gets entries whose title is nothing but their file or folder, via
+    /// <see cref="ILibraryManager"/>.
+    /// </summary>
+    /// <response code="200">Findings returned.</response>
+    /// <returns>The entries named after the file they came from.</returns>
+    [HttpGet("FileNameTitle")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<LayoutFindingDto>> GetFileNameTitles()
+        => Ok(FindingsOfKind(LayoutFindingKind.FileNameTitle));
 
     /// <summary>
     /// Gets season folders without a readable number that do hold files, straight from the
@@ -422,11 +434,136 @@ public class LibraryLayoutController(
     }
 
     /// <summary>
+    /// Gets entries whose title is nothing but their file or folder, straight from the
+    /// database.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <response code="200">Findings returned.</response>
+    /// <returns>The entries named after the file they came from.</returns>
+    /// <remarks>
+    /// <para>
+    /// Coarse in SQL, exact in memory. The database narrows to "the name contains a dot" or
+    /// "the path ends in the name"; counting dot-separated pieces of two characters or more,
+    /// and the clause that exonerates a well-named entry, are trivial in C# and awkward in
+    /// SQL. Both stages live in <see cref="FileNameTitleRule"/> so this route and its twin
+    /// cannot drift apart.
+    /// </para>
+    /// <para>
+    /// <c>EF.Functions.Like</c> rather than <c>string.Contains(".")</c>, and the reason is
+    /// worth keeping: <c>Contains(".")</c> is a CA1847 build error under this project's
+    /// analyzer settings, and the fix the analyzer itself suggests - <c>Contains('.')</c> -
+    /// compiles clean, translates on EF Core 10 and <b>throws at query time on the whole
+    /// EF Core 9 line</b>, which is the one Jellyfin 10.11 ships. That failure reaches the
+    /// caller as a 500 and nothing at compile time hints at it.
+    /// </para>
+    /// <para>
+    /// Both path separators are tested. On a Windows server the forward-slash clauses simply
+    /// never match; testing only <c>/</c> would silently drop the entire second half of the
+    /// rule there.
+    /// </para>
+    /// </remarks>
+    [HttpGet("FileNameTitleDB")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<LayoutFindingDto>>> GetFileNameTitlesFromDatabaseAsync(
+        CancellationToken cancellationToken)
+    {
+        var wantedTypes = new[]
+        {
+            itemTypeLookup.BaseItemKindNames[BaseItemKind.Series],
+            itemTypeLookup.BaseItemKindNames[BaseItemKind.Season],
+            itemTypeLookup.BaseItemKindNames[BaseItemKind.Episode],
+            itemTypeLookup.BaseItemKindNames[BaseItemKind.Movie]
+        };
+
+        var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using (dbContext.ConfigureAwait(false))
+        {
+            var candidates = await dbContext.BaseItems
+                .AsNoTracking()
+                .Where(item => wantedTypes.Contains(item.Type)
+                               && !item.IsVirtualItem
+                               && !string.IsNullOrEmpty(item.Name))
+                .Where(item => EF.Functions.Like(item.Name!, "%.%")
+                               || (item.Path != null
+                                   && (item.Path.EndsWith("/" + item.Name)
+                                       || item.Path.EndsWith("\\" + item.Name)
+                                       || item.Path.Contains("/" + item.Name + ".")
+                                       || item.Path.Contains("\\" + item.Name + "."))))
+                .Select(item => new
+                {
+                    item.Id,
+                    item.Type,
+                    item.Name,
+                    item.SeriesName,
+                    item.Path,
+                    ProviderKeys = item.Provider!.Select(provider => provider.ProviderId).ToList()
+                })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var findings = new List<LayoutFindingDto>();
+            foreach (var row in candidates)
+            {
+                var identified = FileNameTitleRule.IsIdentified(row.ProviderKeys);
+                var reasons = FileNameTitleRule.Evaluate(row.Name, row.Path, identified);
+                if (reasons.Count == 0)
+                {
+                    continue;
+                }
+
+                findings.Add(new LayoutFindingDto
+                {
+                    Kind = LayoutFindingKind.FileNameTitle,
+                    ItemId = row.Id,
+                    ItemType = ShortTypeName(row.Type, wantedTypes),
+                    Name = row.Name,
+                    SeriesName = row.SeriesName,
+                    Path = row.Path,
+                    Reasons = reasons,
+                    HasProviderIds = identified
+                });
+            }
+
+            return Ok(Sorted(findings));
+        }
+    }
+
+    /// <summary>
+    /// Turns a stored, fully qualified type name into the short one the responses carry.
+    /// </summary>
+    /// <param name="storedType">The value of <c>BaseItemEntity.Type</c>.</param>
+    /// <param name="wantedTypes">The four stored names, in Series/Season/Episode/Movie order.</param>
+    /// <returns>The short name.</returns>
+    private static string ShortTypeName(string? storedType, string[] wantedTypes)
+    {
+        if (string.Equals(storedType, wantedTypes[0], StringComparison.Ordinal))
+        {
+            return SeriesTypeName;
+        }
+
+        if (string.Equals(storedType, wantedTypes[1], StringComparison.Ordinal))
+        {
+            return SeasonTypeName;
+        }
+
+        return string.Equals(storedType, wantedTypes[2], StringComparison.Ordinal)
+            ? EpisodeTypeName
+            : MovieTypeName;
+    }
+
+    /// <summary>
     /// Orders findings the same way on both routes, which is what lets a caller compare the
     /// two outputs line by line.
     /// </summary>
     /// <param name="findings">The findings to order.</param>
     /// <returns>The findings by series name, then season number, then name, nulls last.</returns>
+    /// <remarks>
+    /// The final <c>ItemId</c> is a tiebreaker, not decoration. Without it the order of rows
+    /// that agree on every other key is whatever each half happens to produce, and the pair
+    /// stops being comparable element by element - which is the only reason it exists.
+    /// FileNameTitle makes that reachable: the same episode held in two releases has one
+    /// series, one season and one name.
+    /// </remarks>
     private static List<LayoutFindingDto> Sorted(IEnumerable<LayoutFindingDto> findings)
         => findings
             .OrderBy(finding => finding.SeriesName is null)
@@ -435,6 +572,7 @@ public class LibraryLayoutController(
             .ThenBy(finding => finding.SeasonNumber)
             .ThenBy(finding => finding.Name is null)
             .ThenBy(finding => finding.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(finding => finding.ItemId)
             .ToList();
 
     /// <summary>
@@ -476,12 +614,81 @@ public class LibraryLayoutController(
             Recursive = true
         }).OfType<Episode>().ToList();
 
+        // Only FileNameTitle looks at movies, and it is the only kind that does. The cost is
+        // one extra query per request on this shared build; the alternative is a second
+        // materialisation path, which is how two halves start to disagree.
+        var allMovies = libraryManager.GetItemList(new InternalItemsQuery
+        {
+            IncludeItemTypes = [BaseItemKind.Movie],
+            Recursive = true
+        }).ToList();
+
         var findings = new List<LayoutFindingDto>();
         AddSeasonFolderFindings(findings, allSeasons, allEpisodes);
         AddDuplicateSeasonNumberFindings(findings, allSeasons);
         AddSeriesWithoutFilesFindings(findings, allSeries, allEpisodes);
         AddOrphanedItemFindings(findings, allSeries, allSeasons, allEpisodes);
+        AddFileNameTitleFindings(findings, allSeries, allSeasons, allEpisodes, allMovies);
         return findings;
+    }
+
+    /// <summary>
+    /// Adds the entries whose title is nothing but their file or folder.
+    /// </summary>
+    /// <param name="findings">The list to add to.</param>
+    /// <param name="series">Every series.</param>
+    /// <param name="seasons">Every season.</param>
+    /// <param name="episodes">Every episode row, real and virtual.</param>
+    /// <param name="movies">Every movie.</param>
+    /// <remarks>
+    /// The decision itself is <see cref="FileNameTitleRule"/>, shared with the database
+    /// route. Virtual rows are excluded here rather than by the queries, because the other
+    /// findings in this pass need them.
+    /// </remarks>
+    private static void AddFileNameTitleFindings(
+        List<LayoutFindingDto> findings,
+        List<Series> series,
+        List<Season> seasons,
+        List<Episode> episodes,
+        List<BaseItem> movies)
+    {
+        var groups = new (IEnumerable<BaseItem> Items, string TypeName)[]
+        {
+            (series, SeriesTypeName),
+            (seasons, SeasonTypeName),
+            (episodes, EpisodeTypeName),
+            (movies, MovieTypeName)
+        };
+
+        foreach (var (items, typeName) in groups)
+        {
+            foreach (var item in items)
+            {
+                if (item.IsVirtualItem)
+                {
+                    continue;
+                }
+
+                var identified = FileNameTitleRule.IsIdentified(item.ProviderIds?.Keys);
+                var reasons = FileNameTitleRule.Evaluate(item.Name, item.Path, identified);
+                if (reasons.Count == 0)
+                {
+                    continue;
+                }
+
+                findings.Add(new LayoutFindingDto
+                {
+                    Kind = LayoutFindingKind.FileNameTitle,
+                    ItemId = item.Id,
+                    ItemType = typeName,
+                    Name = item.Name,
+                    SeriesName = (item as Episode)?.SeriesName ?? (item as Season)?.SeriesName,
+                    Path = item.Path,
+                    Reasons = reasons,
+                    HasProviderIds = identified
+                });
+            }
+        }
     }
 
     /// <summary>

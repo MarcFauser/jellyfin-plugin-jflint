@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.JFLint.Models;
@@ -94,4 +95,28 @@ public sealed record LayoutFindingDto
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public Guid? DanglingId { get; init; }
+
+    /// <summary>
+    /// Gets why the entry was reported - <c>DottedName</c>, <c>SameAsFileName</c>, or both.
+    /// Filled for <see cref="LayoutFindingKind.FileNameTitle"/>.
+    /// </summary>
+    /// <remarks>
+    /// A list rather than a single value, because the two halves of the rule are joined by
+    /// OR and a third of the findings satisfy both - on the reference library 278 of 810,
+    /// including every one of its season findings. One string could not describe them.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public IReadOnlyList<string>? Reasons { get; init; }
+
+    /// <summary>
+    /// Gets whether the entry carries a real provider id. Filled for
+    /// <see cref="LayoutFindingKind.FileNameTitle"/>, where it separates the two groups: an
+    /// entry without one was never matched, an entry with one is merely named badly.
+    /// </summary>
+    /// <remarks>
+    /// Nullable on purpose. A plain <c>bool</c> would serialise as <c>false</c> on the five
+    /// kinds that do not compute it, which reads as an answer rather than as "not asked".
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public bool? HasProviderIds { get; init; }
 }

@@ -23,6 +23,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.10.0.0] / [12.10.0.0] - 2026-08-07
+
+### Added
+- `FileNameTitle` / `FileNameTitleDB`: entries whose title is nothing but the file or folder
+  they came from - `Trio.mit.vier.Faeusten.S02E01.Unheilvoller.Besuch`, or a season named
+  after an episode's release folder. Not cosmetic: it is what anyone opening the library
+  sees, and a season named that way means Jellyfin made one season per episode folder.
+- A **sixth `LayoutFindingKind`** rather than a seventh DTO, so a caller keeps one parser.
+  `LayoutFindingDto` gains `Reasons` and `HasProviderIds`, both carrying
+  `JsonIgnoreCondition.Never` like every other nullable member.
+- `Reasons` is a **list**, not a single value: the rule's two halves are joined by OR and a
+  third of the findings satisfy both - 278 of 810 on the reference library, including every
+  one of its season findings. One string could not have described them.
+- `HasProviderIds` is `bool?`, not `bool`. A plain bool would serialise as `false` on the
+  five kinds that never compute it, which reads as an answer rather than as "not asked".
+- The first kind that also covers `Movie`, so the object-model route now materialises movies
+  as well.
+
+### Changed
+- `Sorted` ends on `ItemId`. Without a unique tiebreaker the order of rows agreeing on
+  series, season and name is whatever each half happens to produce, and the `X`/`XDB` pair
+  stops being comparable element by element - the only reason the pair exists. Measured
+  reachable: the same episode held in two releases ties on every other key. This also
+  reorders ties in the five existing kinds, which were arbitrary before.
+
+### Notes on the implementation, because two of them are traps
+- The rule is a **verbatim port** of the calling tool's `FileTitleScan.cs`, kept in
+  `FileNameTitleRule` and shared by both halves. A better rule that differs would be worse:
+  the two route halves and that tool's own fallback are each other's controls only while all
+  three reach the same verdict. A reconstruction was tried and measurably failed - a
+  trailing-group test written without an anchor matches the hyphen inside
+  `eps1.1_ones-and-zer0es.mpeg` and keeps in precisely the rows the clause exists to let out.
+- The first predicate uses `EF.Functions.Like(e.Name!, "%.%")`. `Contains(".")` is a **CA1847
+  build error** under this project's `AnalysisMode=AllEnabledByDefault`, and the fix the
+  analyzer itself suggests - `Contains('.')` - compiles clean, translates on EF Core 10 and
+  **throws at query time on the whole EF Core 9 line**, which is what Jellyfin 10.11 ships.
+  It would have shipped green and answered 500 on the server it was built for. Verified
+  before release by translating the route's actual query on EF Core 9 (965 chars of SQL),
+  with `Contains('.')` in the same run as the negative control.
+- Both path separators are tested. On a Windows server the forward-slash clauses never match,
+  and testing only `/` would silently drop the entire second half of the rule there.
+
 ## [11.9.0.0] / [12.9.0.0] - 2026-08-06
 
 ### Fixed
