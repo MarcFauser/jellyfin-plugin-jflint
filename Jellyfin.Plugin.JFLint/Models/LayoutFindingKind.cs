@@ -34,4 +34,16 @@ public static class LayoutFindingKind
     /// exists.
     /// </summary>
     public const string OrphanedItem = nameof(OrphanedItem);
+
+    /// <summary>
+    /// An entry whose title is nothing but the file or folder it came from.
+    /// </summary>
+    /// <remarks>
+    /// The only kind that also covers <c>Movie</c>, and the only one whose rows are not
+    /// necessarily broken - a badly named entry may be matched perfectly well. The two
+    /// groups a caller shows are told apart by
+    /// <see cref="LayoutFindingDto.HasProviderIds"/>: without an id the match failed, with
+    /// one only the name is wrong.
+    /// </remarks>
+    public const string FileNameTitle = nameof(FileNameTitle);
 }

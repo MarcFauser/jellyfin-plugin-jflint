@@ -408,6 +408,51 @@ actually live in both branches.
 `[Authorize(Policy = Policies.RequiresElevation)]` on the controller: the responses
 contain absolute media paths, which is administrator-grade information.
 
+## The one rule that is not ours to improve
+
+`FileNameTitle` reports entries whose title is nothing but their file or folder. The rule
+lives in `FileNameTitleRule` and is a **verbatim port** of the calling tool's
+`FileTitleScan.cs` - deliberately, and it must stay one.
+
+Three implementations answer this question: `FileNameTitle`, `FileNameTitleDB`, and that
+tool's own fallback. They are each other's controls only while all three agree on every row,
+so a *better* rule that differs is worse than this one. Any improvement belongs upstream
+first, and the port follows.
+
+That is not a theoretical risk. Reconstructing the clause from its description was tried: a
+trailing release-group test written as `-XYZ` without an end anchor matches the hyphen inside
+`eps1.1_ones-and-zer0es.mpeg`, so it keeps in exactly the rows the clause exists to let out.
+It looked right and was measurably wrong within minutes.
+
+### Two things that would have shipped green and failed on the server
+
+**`string.Contains(".")` cannot be used here.** It is a CA1847 build error under this
+project's `AnalysisMode=AllEnabledByDefault`. The fix the analyzer itself suggests,
+`Contains('.')`, compiles clean, translates on EF Core 10 - and **throws at query time on the
+whole EF Core 9 line**, which is what Jellyfin 10.11 ships. Nothing at compile time hints at
+it, and Jellyfin's `ExceptionMiddleware` turns it into a 500. Use
+`EF.Functions.Like(e.Name!, "%.%")`, which is clean and translates on both.
+
+Verify this class of thing offline before releasing, not after: `tmp\FnTrans` builds the
+route's actual query against a real SQLite `JellyfinDbContext` on EF Core 9 and prints the
+SQL, with the broken form in the same run as the negative control.
+
+**Both path separators are tested.** The second half of the rule compares the name against
+the last path segment. On a Windows server, matching only `/` drops that half entirely -
+half A survives, because a dotted name has dots whichever separator the path uses.
+
+### Why it is a sixth kind and not a seventh DTO
+
+`LayoutFindingDto` already carried everything but two fields, the caller already parses it,
+and one shape for one parser is the decision recorded for the original five. `Reasons` is a
+**list** because a third of the findings satisfy both halves of the rule - 278 of 810 -
+and `HasProviderIds` is `bool?` because a plain `bool` would answer "false" on the five kinds
+that never ask.
+
+Adding it forced a repair to `Sorted`, which had no unique tiebreaker: rows agreeing on
+series, season and name came back in whatever order each half produced. Harmless while no
+finding could tie; this one can.
+
 ## The one mutation that is not a route pair
 
 `POST /JFLint/ForgetCachedChildren` breaks the `X` / `XDB` convention, and the deviation is
