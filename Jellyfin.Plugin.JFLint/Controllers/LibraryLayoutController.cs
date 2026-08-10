@@ -127,6 +127,17 @@ public class LibraryLayoutController(
         => Ok(FindingsOfKind(LayoutFindingKind.FileNameTitle));
 
     /// <summary>
+    /// Gets seasons that are really one episode's own folder, via
+    /// <see cref="ILibraryManager"/>.
+    /// </summary>
+    /// <response code="200">Findings returned.</response>
+    /// <returns>One row per season, not per series - the roll-up is the caller's.</returns>
+    [HttpGet("PerEpisodeFolder")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<LayoutFindingDto>> GetPerEpisodeFolders()
+        => Ok(FindingsOfKind(LayoutFindingKind.PerEpisodeFolder));
+
+    /// <summary>
     /// Gets season folders without a readable number that do hold files, straight from the
     /// database.
     /// </summary>
@@ -529,6 +540,72 @@ public class LibraryLayoutController(
     }
 
     /// <summary>
+    /// Gets seasons that are really one episode's own folder, straight from the database.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <response code="200">Findings returned.</response>
+    /// <returns>One row per season.</returns>
+    /// <remarks>
+    /// The rule is a season with a path of its own whose name reads as a file name, and it
+    /// borrows <see cref="FileNameTitleRule.LooksLikeAFileName"/> rather than restating it -
+    /// two rules that look alike are two rules that drift apart.
+    /// <para>
+    /// The episode count is deliberately <b>not</b> part of it. It was measured and adds
+    /// nothing on top of the name: on the reference library the ten seasons with a path that
+    /// hold more than one episode are exactly the ten the name condition already drops. Two
+    /// conditions agreeing without being the same condition is the closest thing to
+    /// independent confirmation available here, and it is worth more as a control than as a
+    /// second clause.
+    /// </para>
+    /// </remarks>
+    [HttpGet("PerEpisodeFolderDB")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<LayoutFindingDto>>> GetPerEpisodeFoldersFromDatabaseAsync(
+        CancellationToken cancellationToken)
+    {
+        var seasonType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Season];
+
+        var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using (dbContext.ConfigureAwait(false))
+        {
+            // Coarse in SQL - a season with its own path whose name holds a dot. The piece
+            // count finishes it in memory, over a few hundred rows.
+            var candidates = await dbContext.BaseItems
+                .AsNoTracking()
+                .Where(item => item.Type == seasonType
+                               && !item.IsVirtualItem
+                               && !string.IsNullOrEmpty(item.Path)
+                               && !string.IsNullOrEmpty(item.Name)
+                               && EF.Functions.Like(item.Name!, "%.%"))
+                .Select(item => new
+                {
+                    item.Id,
+                    item.Name,
+                    item.SeriesName,
+                    item.Path,
+                    item.IndexNumber
+                })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var findings = candidates
+                .Where(row => FileNameTitleRule.LooksLikeAFileName(row.Name!))
+                .Select(row => new LayoutFindingDto
+                {
+                    Kind = LayoutFindingKind.PerEpisodeFolder,
+                    ItemId = row.Id,
+                    ItemType = SeasonTypeName,
+                    Name = row.Name,
+                    SeriesName = row.SeriesName,
+                    Path = row.Path,
+                    SeasonNumber = row.IndexNumber
+                });
+
+            return Ok(Sorted(findings));
+        }
+    }
+
+    /// <summary>
     /// Turns a stored, fully qualified type name into the short one the responses carry.
     /// </summary>
     /// <param name="storedType">The value of <c>BaseItemEntity.Type</c>.</param>
@@ -629,7 +706,38 @@ public class LibraryLayoutController(
         AddSeriesWithoutFilesFindings(findings, allSeries, allEpisodes);
         AddOrphanedItemFindings(findings, allSeries, allSeasons, allEpisodes);
         AddFileNameTitleFindings(findings, allSeries, allSeasons, allEpisodes, allMovies);
+        AddPerEpisodeFolderFindings(findings, allSeasons);
         return findings;
+    }
+
+    /// <summary>
+    /// Adds the seasons that are really one episode's own folder.
+    /// </summary>
+    /// <param name="findings">The list to add to.</param>
+    /// <param name="seasons">Every season in the library.</param>
+    private static void AddPerEpisodeFolderFindings(List<LayoutFindingDto> findings, List<Season> seasons)
+    {
+        foreach (var season in seasons)
+        {
+            if (season.IsVirtualItem
+                || string.IsNullOrEmpty(season.Path)
+                || string.IsNullOrEmpty(season.Name)
+                || !FileNameTitleRule.LooksLikeAFileName(season.Name))
+            {
+                continue;
+            }
+
+            findings.Add(new LayoutFindingDto
+            {
+                Kind = LayoutFindingKind.PerEpisodeFolder,
+                ItemId = season.Id,
+                ItemType = SeasonTypeName,
+                Name = season.Name,
+                SeriesName = season.SeriesName,
+                Path = season.Path,
+                SeasonNumber = season.IndexNumber
+            });
+        }
     }
 
     /// <summary>

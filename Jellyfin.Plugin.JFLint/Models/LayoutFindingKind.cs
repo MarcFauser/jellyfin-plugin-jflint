@@ -46,4 +46,22 @@ public static class LayoutFindingKind
     /// one only the name is wrong.
     /// </remarks>
     public const string FileNameTitle = nameof(FileNameTitle);
+
+    /// <summary>
+    /// A season that is really one episode's own folder - a release that gives every
+    /// episode a directory, which Jellyfin resolves as a season each.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A layout fault rather than a metadata one: the series shows twenty seasons of one
+    /// episode, and nothing but flattening the folders on disk repairs it.
+    /// </para>
+    /// <para>
+    /// <b>Its rows are also <see cref="FileNameTitle"/> findings</b>, necessarily - a
+    /// per-episode folder produces a season whose title is a file name. That is not double
+    /// counting to be filtered out: the two answer different questions, "this title is
+    /// wrong" against "this layout is wrong", and they want different repairs.
+    /// </para>
+    /// </remarks>
+    public const string PerEpisodeFolder = nameof(PerEpisodeFolder);
 }
