@@ -107,9 +107,16 @@ public static class FileNameTitleRule
     /// <remarks>
     /// The "length >= 2" floor is what spares acronyms: <c>S.W.A.T.</c> has four dots and no
     /// piece of two characters, so it never reaches three.
+    /// <para>
+    /// Public because <see cref="Models.LayoutFindingKind.PerEpisodeFolder"/> asks the same
+    /// question of a season's name. Sharing the predicate is the point: two rules that look
+    /// alike are two rules that drift apart.
+    /// </para>
     /// </remarks>
-    private static bool LooksLikeAFileName(string name)
+    public static bool LooksLikeAFileName(string name)
     {
+        ArgumentNullException.ThrowIfNull(name);
+
         if (name.Contains(' ', StringComparison.Ordinal))
         {
             return false;

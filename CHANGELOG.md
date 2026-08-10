@@ -41,6 +41,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The first kind that also covers `Movie`, so the object-model route now materialises movies
   as well.
 
+- `PerEpisodeFolder` / `PerEpisodeFolderDB`: a season that is really one episode's own
+  folder, from a release that gives every episode a directory. Jellyfin resolves each as a
+  season, so a series shows twenty seasons of one episode and the season names are release
+  strings. A layout fault rather than a metadata one - only flattening the folders on disk
+  repairs it, which is why it wants a list of its own.
+- It borrows `FileNameTitleRule.LooksLikeAFileName` rather than restating the condition. Two
+  rules that look alike are two rules that drift apart.
+- The episode count is deliberately **not** part of it. Measured upstream: the ten seasons
+  with a path that hold more than one episode are exactly the ten the name condition already
+  drops. Two conditions agreeing without being the same condition is worth more as a control
+  than as a second clause.
+- **Its rows are also `FileNameTitle` findings**, necessarily - a per-episode folder produces
+  a season whose title is a file name. Not double counting: the two answer different
+  questions and want different repairs. Documented on the kind so nobody reports it as a
+  defect.
+
 ### Changed
 - `Sorted` ends on `ItemId`. Without a unique tiebreaker the order of rows agreeing on
   series, season and name is whatever each half happens to produce, and the `X`/`XDB` pair
