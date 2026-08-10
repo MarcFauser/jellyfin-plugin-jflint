@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.10.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.10.0.0/jellyfin-plugin-jflint_12.10.0.0.zip",
+        "checksum": "75202eb75f5940c65de2bf0302419c7d",
+        "changelog": "Two new checks. FileNameTitle lists entries whose title is nothing but the file or folder they came from, which is what anyone opening the library actually sees. PerEpisodeFolder lists seasons that are really one episode's own directory, from releases that give each episode a folder - Jellyfin turns each of those into a season, so one series shows twenty. Both arrive as new kinds on the existing findings shape, so a caller needs no new parser.",
+        "timestamp": "2026-08-10T08:50:54Z"
+      },
+      {
         "version": "12.9.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.9.0.0/jellyfin-plugin-jflint_12.9.0.0.zip",
@@ -110,6 +118,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.10.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.10.0.0/jellyfin-plugin-jflint_11.10.0.0.zip",
+        "checksum": "6b1be8ed0e250b4c2693e20ed6867625",
+        "changelog": "Two new checks. FileNameTitle lists entries whose title is nothing but the file or folder they came from, which is what anyone opening the library actually sees. PerEpisodeFolder lists seasons that are really one episode's own directory, from releases that give each episode a folder - Jellyfin turns each of those into a season, so one series shows twenty. Both arrive as new kinds on the existing findings shape, so a caller needs no new parser.",
+        "timestamp": "2026-08-10T08:50:54Z"
       },
       {
         "version": "11.9.0.0",
