@@ -4,7 +4,7 @@
     "name": "JFLint",
     "description": "Adds endpoints for library defects that /Items cannot filter for, starting with episodes whose season could not be determined.",
     "overview": "Library-lint queries the Jellyfin API cannot express.",
-    "owner": "MarcFauser",
+    "owner": "Marc Fauser",
     "category": "General",
     "versions": [
       {

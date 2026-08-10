@@ -47,6 +47,12 @@ param(
     [string]$RepoOwner = 'MarcFauser',
     [string]$RepoName  = 'jellyfin-plugin-jflint',
 
+    # The name Jellyfin shows as "Developer", and it is NOT the GitHub account. The manifest
+    # used to take $RepoOwner for both, so the catalogue advertised a login. The official
+    # plugins put a readable name here - measured on the running server, they all carry
+    # owner='jellyfin' - and URLs are the only thing $RepoOwner should build.
+    [string]$Developer = 'Marc Fauser',
+
     # Create the GitHub releases and push manifest.json. Without this the build stays
     # entirely local and nothing becomes visible to anyone.
     [switch]$Publish
@@ -208,7 +214,7 @@ foreach ($t in $targets)
         overview    = 'Library-lint queries the Jellyfin API cannot express.'
         description = 'Adds endpoints for library defects that /Items cannot filter for, ' +
                       'starting with episodes whose season could not be determined.'
-        owner       = 'marc.fauser'
+        owner       = $Developer
         category    = 'General'
         version     = $t.Version
         targetAbi   = $t.TargetAbi
@@ -273,6 +279,12 @@ if (Test-Path -LiteralPath $manifestPath)
     }
 
     $package = $loaded[0]
+
+    # The package header is carried over from the existing manifest, which is right for the
+    # release history - but it also means a corrected value would never take effect. The
+    # display name is governed by the parameter, so it is written on every run rather than
+    # inherited. Found the hard way: fixing $Developer alone changed nothing at all.
+    $package.owner = $Developer
 }
 else
 {
@@ -282,7 +294,7 @@ else
         description = 'Adds endpoints for library defects that /Items cannot filter for, ' +
                       'starting with episodes whose season could not be determined.'
         overview    = 'Library-lint queries the Jellyfin API cannot express.'
-        owner       = $RepoOwner
+        owner       = $Developer
         category    = 'General'
         versions    = @()
     }
