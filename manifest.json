@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.10.0.1",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.10.0.1/jellyfin-plugin-jflint_12.10.0.1.zip",
+        "checksum": "683da4a639b7a922829e84a660f72c1c",
+        "changelog": "Keeps the file-name-title rule level with the tool that defines it: 4k now counts as a release marker, alongside the resolutions the pattern already knew. Measured to change no finding on the reference library - it closes a gap rather than moving a number.",
+        "timestamp": "2026-08-10T09:57:14Z"
+      },
+      {
         "version": "12.10.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.10.0.0/jellyfin-plugin-jflint_12.10.0.0.zip",
@@ -118,6 +126,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.10.0.1",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.10.0.1/jellyfin-plugin-jflint_11.10.0.1.zip",
+        "checksum": "133207685b6039f1b0bb9d36dabf9984",
+        "changelog": "Keeps the file-name-title rule level with the tool that defines it: 4k now counts as a release marker, alongside the resolutions the pattern already knew. Measured to change no finding on the reference library - it closes a gap rather than moving a number.",
+        "timestamp": "2026-08-10T09:57:14Z"
       },
       {
         "version": "11.10.0.0",
