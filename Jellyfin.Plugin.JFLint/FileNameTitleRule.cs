@@ -54,7 +54,7 @@ public static class FileNameTitleRule
     // boundaries in the pattern, so 1080p matches as a token and not as a substring, and the
     // group tag matches only at the end.
     private static readonly Regex Evidence = new(
-        @"(^|[.\-_])(\d{3,4}p|[xh]\.?26[45]|HEVC|AVC|BluRay|BDRip|WEB|WEBRip|WEB-?DL|HDTV|DVDRip|REMUX|UHD)([.\-_]|$)"
+        @"(^|[.\-_])(\d{3,4}p|4k|[xh]\.?26[45]|HEVC|AVC|BluRay|BDRip|WEB|WEBRip|WEB-?DL|HDTV|DVDRip|REMUX|UHD)([.\-_]|$)"
         + @"|(^|[.\-_])(German|English|Deutsch|MULTi|DL|AC3|DTS|EAC3|DDP?5|TrueHD|Atmos|HDR|DV|SDR)([.\-_]|$)"
         + @"|(^|[.\-_])(iNTERNAL|REPACK|PROPER|UNRATED|EXTENDED|COMPLETE|UNCUT|ANiME|RETAIL)([.\-_]|$)"
         + @"|S\d{1,2}E\d{1,3}|(^|[.\-_])E\d{2,4}([.\-_]|$)|(^|[.\-_])OVA\d*([.\-_]|$)|-[A-Za-z0-9]{2,}$",
