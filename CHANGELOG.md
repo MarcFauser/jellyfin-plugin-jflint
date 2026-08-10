@@ -23,6 +23,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.10.0.1] / [12.10.0.1] - 2026-08-10
+
+### Changed
+- `4k` added to the release-evidence pattern, keeping the port level with upstream
+  `FileTitleScan` at `f58b8c6`. A title whose only release marker was `4k` would otherwise
+  have been exonerated, since the pattern only knew `\d{3,4}p`.
+- **Changes nothing on the reference library, and that was measured from both sides before
+  it went in.** One entry there matches a search for `4k` and none carries it as a token in a
+  name - the `4k` folder appears in paths, not titles. The 837 ids upstream produced *with*
+  the change are the same 837 this plugin produced *without* it.
+- Verified as a token rather than a substring: `Ocean.14k.Gold.Story` and
+  `The.4kids.Dub.Version` are still left alone.
+
+### Verified
+- **The two implementations agree row for row, not just in total.** Upstream sent its 837 ids
+  and titles; the diff against `FileNameTitleDB` is 0 only-theirs, 0 only-ours, 0 titles
+  differing on a shared id - with an invented id as the control that the comparison can fail.
+  The previous entry could only claim four matching type sums; this closes the gap it named.
+
 ## [11.10.0.0] / [12.10.0.0] - 2026-08-07
 
 ### Added
