@@ -8,6 +8,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Plugin.JFLint.Models;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -40,6 +41,8 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// </remarks>
 /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
 /// <param name="itemTypeLookup">Instance of the <see cref="IItemTypeLookup"/> interface.</param>
+/// <param name="appHost">Instance of the <see cref="IServerApplicationHost"/> interface, used
+/// to expand the stored form of a path - see <see cref="StoredPath"/>.</param>
 /// <param name="dbContextFactory">Factory for the Jellyfin database context.</param>
 [ApiController]
 [Route("JFLint")]
@@ -48,6 +51,7 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 public class DuplicateController(
     ILibraryManager libraryManager,
     IItemTypeLookup itemTypeLookup,
+    IServerApplicationHost appHost,
     IDbContextFactory<JellyfinDbContext> dbContextFactory) : ControllerBase
 {
     // Fully qualified: ControllerBase has an instance property called MetadataProvider,
@@ -194,7 +198,7 @@ public class DuplicateController(
                     row.ParentIndexNumber,
                     row.IndexNumber,
                     row.Name,
-                    row.Path,
+                    StoredPath.Expand(appHost, row.Path),
                     row.Size,
                     Pixels(row.Width),
                     Pixels(row.Height),
@@ -322,7 +326,7 @@ public class DuplicateController(
                     movie.Name,
                     movie.ProductionYear,
                     key,
-                    movie.Path,
+                    StoredPath.Expand(appHost, movie.Path),
                     movie.Size,
                     Pixels(movie.Width),
                     Pixels(movie.Height),
