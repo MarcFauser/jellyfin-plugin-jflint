@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mime;
@@ -7,6 +8,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Plugin.JFLint.Models;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -26,6 +28,8 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// </remarks>
 /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
 /// <param name="itemTypeLookup">Instance of the <see cref="IItemTypeLookup"/> interface.</param>
+/// <param name="appHost">Instance of the <see cref="IServerApplicationHost"/> interface, used
+/// to expand the stored form of a path - see <see cref="StoredPath"/>.</param>
 /// <param name="dbContextFactory">Factory for the Jellyfin database context.</param>
 [ApiController]
 [Route("JFLint")]
@@ -34,6 +38,7 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 public class JFLintController(
     ILibraryManager libraryManager,
     IItemTypeLookup itemTypeLookup,
+    IServerApplicationHost appHost,
     IDbContextFactory<JellyfinDbContext> dbContextFactory) : ControllerBase
 {
     /// <summary>
@@ -63,14 +68,13 @@ public class JFLintController(
             .Where(episode => episode.ParentIndexNumber is null)
             .Select(episode => new OrphanEpisodeDto(
                 episode.Id,
-                episode.SeriesId,
+                SeriesIdOf(episode.SeriesId),
                 episode.SeriesName,
                 episode.IndexNumber,
                 episode.Name,
-                episode.Path))
-            .ToList();
+                episode.Path));
 
-        return Ok(orphans);
+        return Ok(Sorted(orphans));
     }
 
     /// <summary>
@@ -98,22 +102,60 @@ public class JFLintController(
         var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (dbContext.ConfigureAwait(false))
         {
-            var orphans = await dbContext.BaseItems
+            var rows = await dbContext.BaseItems
                 .AsNoTracking()
                 .Where(item => item.Type == episodeType
                                && item.ParentIndexNumber == null
                                && !item.IsVirtualItem)
-                .Select(item => new OrphanEpisodeDto(
-                    item.Id,
-                    item.SeriesId,
-                    item.SeriesName,
-                    item.IndexNumber,
-                    item.Name,
-                    item.Path))
+                .Select(item => new { item.Id, item.SeriesId, item.SeriesName, item.IndexNumber, item.Name, item.Path })
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            return Ok(orphans);
+            // Materialised first, because the two conversions below are plain C#: the path
+            // has to be expanded out of its stored form, and neither could run inside the
+            // SQL translation.
+            var orphans = rows.Select(row => new OrphanEpisodeDto(
+                row.Id,
+                SeriesIdOf(row.SeriesId),
+                row.SeriesName,
+                row.IndexNumber,
+                row.Name,
+                StoredPath.Expand(appHost, row.Path)));
+
+            return Ok(Sorted(orphans));
         }
     }
+
+    /// <summary>
+    /// Reports an unset series link as null on both routes. The column is nullable, but the
+    /// write path stores <see cref="Guid.Empty"/> rather than NULL, and materialising turns a
+    /// NULL into <see cref="Guid.Empty"/> as well - so without this the two halves could
+    /// report the same missing link as <c>null</c> and as an all-zero guid.
+    /// </summary>
+    /// <param name="value">The series id as either half holds it.</param>
+    /// <returns>The series id, or null when there is none.</returns>
+    private static Guid? SeriesIdOf(Guid? value)
+        => value is null || value == Guid.Empty ? null : value;
+
+    /// <summary>
+    /// Orders findings the same way on both routes.
+    /// </summary>
+    /// <remarks>
+    /// This pair was the only one in the plugin where neither half imposed an order. That is
+    /// not the same as both being unordered: the library half inherits Jellyfin's default
+    /// <c>OrderBy(SortName)</c> from <c>BaseItemRepository.ApplyOrder</c>, while the database
+    /// half had no <c>OrderBy</c> at all and got SQLite's scan order. The two therefore could
+    /// not be compared element by element, which is the only reason the pair exists. It went
+    /// unnoticed because the route returns nothing on the reference library.
+    /// </remarks>
+    /// <param name="items">The items to order.</param>
+    /// <returns>The items in a deterministic order.</returns>
+    private static List<OrphanEpisodeDto> Sorted(IEnumerable<OrphanEpisodeDto> items)
+        => items
+            .OrderBy(item => item.SeriesName, StringComparer.Ordinal)
+            .ThenBy(item => item.IndexNumber)
+            .ThenBy(item => item.Name, StringComparer.Ordinal)
+            .ThenBy(item => item.Path, StringComparer.Ordinal)
+            .ThenBy(item => item.Id)
+            .ToList();
 }

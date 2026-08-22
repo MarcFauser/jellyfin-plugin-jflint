@@ -9,6 +9,7 @@ using Jellyfin.Database.Implementations;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.JFLint.Models;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -38,6 +39,8 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// </remarks>
 /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
 /// <param name="itemTypeLookup">Instance of the <see cref="IItemTypeLookup"/> interface.</param>
+/// <param name="appHost">Instance of the <see cref="IServerApplicationHost"/> interface, used
+/// to expand the stored form of a path - see <see cref="StoredPath"/>.</param>
 /// <param name="dbContextFactory">Factory for the Jellyfin database context.</param>
 [ApiController]
 [Route("JFLint")]
@@ -46,6 +49,7 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 public class LibraryLayoutController(
     ILibraryManager libraryManager,
     IItemTypeLookup itemTypeLookup,
+    IServerApplicationHost appHost,
     IDbContextFactory<JellyfinDbContext> dbContextFactory) : ControllerBase
 {
     // The short names the responses carry, tied to the enum rather than written out, so a
@@ -174,7 +178,7 @@ public class LibraryLayoutController(
                 ItemType = SeasonTypeName,
                 Name = row.Name,
                 SeriesName = row.SeriesName,
-                Path = row.Path
+                Path = StoredPath.Expand(appHost, row.Path)
             })));
         }
     }
@@ -214,7 +218,7 @@ public class LibraryLayoutController(
                 ItemType = SeasonTypeName,
                 Name = row.Name,
                 SeriesName = row.SeriesName,
-                Path = row.Path
+                Path = StoredPath.Expand(appHost, row.Path)
             })));
         }
     }
@@ -286,7 +290,7 @@ public class LibraryLayoutController(
                     ItemType = SeasonTypeName,
                     Name = row.Name,
                     SeriesName = row.SeriesName,
-                    Path = row.Path,
+                    Path = StoredPath.Expand(appHost, row.Path),
                     SeasonNumber = row.IndexNumber,
                     GroupSize = groupSizes[(row.SeriesId, row.IndexNumber)]
                 })));
@@ -370,7 +374,7 @@ public class LibraryLayoutController(
                     ItemId = row.Id,
                     ItemType = SeriesTypeName,
                     Name = row.Name,
-                    Path = row.Path,
+                    Path = StoredPath.Expand(appHost, row.Path),
                     EpisodeRowCount = rowCount
                 });
             }
@@ -437,7 +441,7 @@ public class LibraryLayoutController(
                     : EpisodeTypeName,
                 Name = row.Name,
                 SeriesName = row.SeriesName,
-                Path = row.Path,
+                Path = StoredPath.Expand(appHost, row.Path),
                 DanglingLink = row.SeriesMissing ? SeriesLink : row.SeasonMissing ? SeasonLink : ParentLink,
                 DanglingId = row.SeriesMissing ? row.SeriesId : row.SeasonMissing ? row.SeasonId : row.ParentId
             })));
@@ -515,8 +519,12 @@ public class LibraryLayoutController(
             var findings = new List<LayoutFindingDto>();
             foreach (var row in candidates)
             {
+                // Expanded before the rule sees it, not just before it is reported: the twin
+                // feeds the rule a materialised item's Path, so anything else here would be
+                // handing the same decision two different inputs.
+                var path = StoredPath.Expand(appHost, row.Path);
                 var identified = FileNameTitleRule.IsIdentified(row.ProviderKeys);
-                var reasons = FileNameTitleRule.Evaluate(row.Name, row.Path, identified);
+                var reasons = FileNameTitleRule.Evaluate(row.Name, path, identified);
                 if (reasons.Count == 0)
                 {
                     continue;
@@ -529,7 +537,7 @@ public class LibraryLayoutController(
                     ItemType = ShortTypeName(row.Type, wantedTypes),
                     Name = row.Name,
                     SeriesName = row.SeriesName,
-                    Path = row.Path,
+                    Path = path,
                     Reasons = reasons,
                     HasProviderIds = identified
                 });
@@ -597,7 +605,7 @@ public class LibraryLayoutController(
                     ItemType = SeasonTypeName,
                     Name = row.Name,
                     SeriesName = row.SeriesName,
-                    Path = row.Path,
+                    Path = StoredPath.Expand(appHost, row.Path),
                     SeasonNumber = row.IndexNumber
                 });
 

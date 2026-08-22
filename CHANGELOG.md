@@ -23,6 +23,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.12.0.0] / [12.12.0.0] - 2026-08-22
+
+### Fixed
+- **The placeholder trap was fixed in one route and left in nine.** The previous release
+  taught `ItemsByPathDB` that Jellyfin stores `%MetadataPath%` and `%AppDataPath%` rather than
+  real paths, but every other database half still emitted the raw column while its library
+  half emitted the expanded one. Not reachable on this library today - measured, zero Series,
+  Season, Episode or Movie rows carry a placeholder - but the `Collections` library already
+  sits under the data directory, and in `DuplicateEpisode` and `DuplicateMovie` `Path` is the
+  last sort key, so the pair would have differed in row *order* as well as in the string.
+  Every database half now expands what it read, through a single `StoredPath` helper rather
+  than a call copied to each site.
+- `FileNameTitleDB` expands the path **before** handing it to `FileNameTitleRule.Evaluate`,
+  not merely before reporting it. The twin feeds the rule a materialised item's path, and the
+  same decision must not be made on two different inputs.
+- **`EpisodesWithoutSeason` was the only pair with no shared comparer**, so it could not be
+  compared element by element - which is the only reason a pair exists. This is not the same
+  as both halves being unordered: the library half silently inherits Jellyfin's default
+  `OrderBy(SortName)` from `BaseItemRepository.ApplyOrder`, while the database half had no
+  `OrderBy` at all and took SQLite's scan order. Both now run through one `Sorted`.
+- The same pair reported an unset series link two ways - the library half as an all-zero guid,
+  the database half as `null`. Both now report `null`.
+
+### Verified
+- Both target frameworks build clean, 0 warnings under `TreatWarningsAsErrors`.
+- The sweep was checked rather than assumed: all eight `row.Path` uses in
+  `LibraryLayoutController` were confirmed to sit inside `*FromDatabaseAsync` methods before
+  anything was replaced, and `ItemRemovalController` and `CacheController` were confirmed to
+  touch no database at all, so their paths are already expanded.
+- **The ordering fix cannot be demonstrated on this library**, because the route returns zero
+  rows here and a zero-row comparison cannot detect an ordering difference. It rests on the
+  source, and that is said plainly rather than dressed up as a passing test.
+
+### Added
+- A suite check that asks `ItemsByPathDB` for the stored spelling and requires every returned
+  `Path` to come back expanded, with a control proving the check fires on a placeholder, plus
+  a comparison that both halves report identical `Path` strings and not merely identical ids.
+  This check was failing before the previous release.
+
 ## [11.11.0.0] / [12.11.0.0] - 2026-08-22
 
 ### Fixed

@@ -134,3 +134,31 @@ disagrees about is worse than no cross-check, because it still looks like one.
 The habit that caught it was cheap and mechanical: measure the object the other party
 named, not one that approximately resembles it, and count on the raw response text -
 `@(ConvertFrom-Json '[]')` reports `1`, which had already made one probe look like a hit.
+
+### The half-fix, one release later
+
+Fixing `ItemsByPathDB` fixed the route that had been *reported*. An audit of the other ten
+pairs found the same trap sitting in nine of them: every database half still emitted the raw
+column while its library half emitted the expanded path.
+
+Nothing was broken on this library - zero Series, Season, Episode or Movie rows carry a
+placeholder - so it would have passed any test anyone thought to write. It is reachable the
+moment a library is pointed under the data or metadata directory, and one already is: the
+owner's `Collections` library lives at `/var/lib/jellyfin/data/collections`. In two of those
+pairs `Path` is the last sort key, so the halves would have disagreed on row order too.
+
+**A bug report names one instance; it does not scope the defect.** The cheap move after any
+fix is to ask what class it belonged to and grep for the rest of the class - and then verify
+the grep, which is what turned up that all eight candidate sites were genuinely database
+halves and that two controllers touch no database at all.
+
+The same audit found the reverse shape as well: `EpisodesWithoutSeason` was the only pair
+with no shared comparer. Not because both halves were unordered - the library half quietly
+inherits `OrderBy(SortName)` from Jellyfin's own repository while the database half took
+SQLite's scan order. Two halves that are each ordered, differently, look exactly like two
+halves that agree, for as long as the route returns nothing. It has returned nothing for
+weeks.
+
+That one cannot be demonstrated here, and the changelog says so rather than claiming a green
+test. A route with no rows makes a comparison vacuous, and a vacuous comparison that reports
+`ok` is worse than no comparison at all.
