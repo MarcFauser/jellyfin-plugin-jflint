@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.13.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.13.0.0/jellyfin-plugin-jflint_12.13.0.0.zip",
+        "checksum": "ee6b19b086d882d85487c5369bed192e",
+        "changelog": "ItemsByPathDB now searches one range per stored path root, so it also agrees with ItemsByPath for a directory that contains Jellyfin metadata or data directory rather than lying inside it - the previous release corrected only the case at or below them. Both halves also take an item type name from the same table, so the same row is no longer labelled two ways.",
+        "timestamp": "2026-08-22T10:42:25Z"
+      },
+      {
         "version": "12.12.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.12.0.0/jellyfin-plugin-jflint_12.12.0.0.zip",
@@ -142,6 +150,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.13.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.13.0.0/jellyfin-plugin-jflint_11.13.0.0.zip",
+        "checksum": "4ded44d194982fbba76d0cbc42a1fe62",
+        "changelog": "ItemsByPathDB now searches one range per stored path root, so it also agrees with ItemsByPath for a directory that contains Jellyfin metadata or data directory rather than lying inside it - the previous release corrected only the case at or below them. Both halves also take an item type name from the same table, so the same row is no longer labelled two ways.",
+        "timestamp": "2026-08-22T10:42:25Z"
       },
       {
         "version": "11.12.0.0",
