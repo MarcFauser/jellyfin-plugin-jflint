@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.12.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.12.0.0/jellyfin-plugin-jflint_12.12.0.0.zip",
+        "checksum": "3d9e5d94d8bb52ba404975048699c900",
+        "changelog": "Every database-backed route now reports the same paths as its library-backed twin: Jellyfin stores the metadata and data directories as placeholders, and only one route expanded them back. Also gives the episodes-without-season pair a shared row order, so its two halves can be compared line by line.",
+        "timestamp": "2026-08-22T00:45:17Z"
+      },
+      {
         "version": "12.11.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.11.0.0/jellyfin-plugin-jflint_12.11.0.0.zip",
@@ -134,6 +142,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.12.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.12.0.0/jellyfin-plugin-jflint_11.12.0.0.zip",
+        "checksum": "68947580935799a6442a9a9df309d256",
+        "changelog": "Every database-backed route now reports the same paths as its library-backed twin: Jellyfin stores the metadata and data directories as placeholders, and only one route expanded them back. Also gives the episodes-without-season pair a shared row order, so its two halves can be compared line by line.",
+        "timestamp": "2026-08-22T00:45:17Z"
       },
       {
         "version": "11.11.0.0",
