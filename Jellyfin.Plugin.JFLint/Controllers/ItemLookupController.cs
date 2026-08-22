@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Plugin.JFLint.Models;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
@@ -41,6 +42,8 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// </remarks>
 /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
 /// <param name="itemTypeLookup">Instance of the <see cref="IItemTypeLookup"/> interface.</param>
+/// <param name="appHost">Instance of the <see cref="IServerApplicationHost"/> interface, which
+/// owns the placeholder substitution these two routes have to agree on.</param>
 /// <param name="dbContextFactory">Factory for the Jellyfin database context.</param>
 [ApiController]
 [Route("JFLint")]
@@ -49,16 +52,24 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 public class ItemLookupController(
     ILibraryManager libraryManager,
     IItemTypeLookup itemTypeLookup,
+    IServerApplicationHost appHost,
     IDbContextFactory<JellyfinDbContext> dbContextFactory) : ControllerBase
 {
     /// <summary>
     /// Gets every item at a path or beneath it, via <see cref="ILibraryManager"/>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The safe twin. <c>InternalItemsQuery.Path</c> exists but is an equality filter, so
     /// it cannot serve the "beneath" half; this route therefore materialises the library
     /// and filters in memory, which is slow. It is the insurance against a database schema
     /// change, not the route to reach for.
+    /// </para>
+    /// <para>
+    /// Accepts either spelling of a directory - the real one, or Jellyfin's stored
+    /// <c>%MetadataPath%</c> / <c>%AppDataPath%</c> placeholder form - and answers the same
+    /// for both, as does its twin.
+    /// </para>
     /// </remarks>
     /// <param name="path">The file or folder path to look up.</param>
     /// <response code="200">Items returned; an empty array when the path holds nothing.</response>
@@ -69,7 +80,7 @@ public class ItemLookupController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public ActionResult<IReadOnlyList<PathItemDto>> GetItemsByPath([FromQuery] string? path)
     {
-        var target = Normalize(path);
+        var target = ExpandedTarget(path);
         if (target is null)
         {
             return BadRequest("path must be a non-empty path below the library root.");
@@ -81,8 +92,11 @@ public class ItemLookupController(
         // hold rows whose Type no longer resolves to a class - leftovers from a plugin
         // that was removed - and an unrestricted GetItemList dies on the first one with
         // "Cannot deserialize unknown type". Naming every kind the server can name keeps
-        // those rows out of the deserializer, and keeps this route's answer identical to
-        // its database twin, which filters on the same set.
+        // those rows out of the deserializer.
+        //
+        // It does NOT by itself make this route agree with its database twin, and the
+        // comment that used to claim it did was wrong: the two halves already drew the
+        // same rows, they just spelled Path differently. See the twin below.
         var items = libraryManager.GetItemList(new InternalItemsQuery
         {
             IncludeItemTypes = itemTypeLookup.BaseItemKindNames.Keys.ToArray(),
@@ -119,6 +133,13 @@ public class ItemLookupController(
     /// for a LIKE carrying an ESCAPE clause - which would have thrown away the one index
     /// this route depends on. Measured from the generated SQL, not assumed.
     /// </para>
+    /// <para>
+    /// The caller's path is put into Jellyfin's <b>stored</b> form before it is compared -
+    /// the metadata and data directories are held in the column as <c>%MetadataPath%</c> and
+    /// <c>%AppDataPath%</c>, not as real paths - and every returned <c>Path</c> is expanded
+    /// back. Without that, this route answered 0 for anything below those two directories
+    /// while its twin answered in full.
+    /// </para>
     /// </remarks>
     /// <param name="path">The file or folder path to look up.</param>
     /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
@@ -132,19 +153,39 @@ public class ItemLookupController(
         [FromQuery] string? path,
         CancellationToken cancellationToken)
     {
-        var target = Normalize(path);
+        var target = ExpandedTarget(path);
         if (target is null)
         {
             return BadRequest("path must be a non-empty path below the library root.");
         }
 
+        // Jellyfin does not store the path it hands out. On write it swaps the metadata and
+        // data directories for the placeholders %MetadataPath% and %AppDataPath%
+        // (BaseItemRepository.GetPathToSave -> IServerApplicationHost.ReverseVirtualPath) and
+        // swaps them back when it materialises the item. So the twin above filters expanded
+        // paths while this route compares against the stored form, and comparing a caller's
+        // real path to the column silently misses everything below those two directories.
+        //
+        // Measured before this line existed: /var/lib/jellyfin/metadata returned 0 here and
+        // 99005 from the twin - and asking this same route for "%MetadataPath%" returned the
+        // very same 99005. Nothing was missing; only the spelling differed.
+        //
+        // Jellyfin filters by path exactly this way (BaseItemRepository: pathToQuery =
+        // GetPathToSave(filter.Path)), so matching its behaviour is also what keeps us
+        // consistent with whatever it wrote - including the fact that the replacement is
+        // unanchored and would rewrite a media path that merely contains one of the two
+        // directories as a substring.
+        var stored = appHost.ReverseVirtualPath(target);
+
+        // The separator comes from the expanded path: the stored form may be nothing but the
+        // placeholder, which carries no separator to read.
         var separator = SeparatorOf(target);
 
-        // The half-open range [target + separator, target + (separator + 1)) is exactly
-        // "starts with target + separator". Anchoring on the separator is what keeps
+        // The half-open range [stored + separator, stored + (separator + 1)) is exactly
+        // "starts with stored + separator". Anchoring on the separator is what keeps
         // /Movies/Ring from swallowing /Movies/Ring2.
-        var lower = target + separator;
-        var upper = target + (char)(separator + 1);
+        var lower = stored + separator;
+        var upper = stored + (char)(separator + 1);
 
         var shortNames = ShortTypeNames();
 
@@ -167,18 +208,21 @@ public class ItemLookupController(
                 .Where(item => !item.IsVirtualItem
                                && item.Path != null
                                && knownTypes.Contains(item.Type)
-                               && (item.Path == target
+                               && (item.Path == stored
                                    || (item.Path.CompareTo(lower) >= 0
                                        && item.Path.CompareTo(upper) < 0)))
                 .Select(item => new { item.Id, item.Type, item.Name, item.Path })
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            // Report the expanded form, the same one the twin reports. Without this the two
+            // routes would return the same items under different Path strings, and Sorted()
+            // would even order them differently.
             var found = rows.Select(row => new PathItemDto(
                 row.Id,
                 shortNames[row.Type],
                 row.Name,
-                row.Path));
+                row.Path is null ? null : appHost.ExpandVirtualPath(row.Path)));
 
             return Ok(Sorted(found));
         }
@@ -199,6 +243,28 @@ public class ItemLookupController(
 
         var trimmed = path.Trim().TrimEnd('/', '\\');
         return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    /// <summary>
+    /// Brings a caller-supplied path into the one form both routes start from: trailing
+    /// separator gone, and the <c>%MetadataPath%</c> / <c>%AppDataPath%</c> placeholders
+    /// resolved to real directories. Both routes call this, which is what lets a caller hand
+    /// in either spelling of the same directory and get the same answer from either one.
+    /// </summary>
+    /// <param name="path">The path as supplied by the caller.</param>
+    /// <returns>The comparable path, or null when the input cannot be used.</returns>
+    private string? ExpandedTarget(string? path)
+    {
+        var trimmed = Normalize(path);
+        if (trimmed is null)
+        {
+            return null;
+        }
+
+        // Normalized a second time on purpose: the expansion pastes in a directory that
+        // belongs to Jellyfin's configuration, not to us, and a trailing separator in it
+        // would otherwise reach the comparison.
+        return Normalize(appHost.ExpandVirtualPath(trimmed));
     }
 
     /// <summary>

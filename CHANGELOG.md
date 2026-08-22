@@ -23,6 +23,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.11.0.0] / [12.11.0.0] - 2026-08-22
+
+### Fixed
+- **`ItemsByPathDB` answered 0 for everything below the metadata and data directories,
+  while `ItemsByPath` answered in full.** The two routes are a pair precisely so each is the
+  other's cross-check, and that promise was broken. Jellyfin does not store the path it hands
+  out: on write it swaps those two directories for the placeholders `%MetadataPath%` and
+  `%AppDataPath%` (`BaseItemRepository.GetPathToSave` -> `IServerApplicationHost.ReverseVirtualPath`)
+  and swaps them back when it materialises the item. The library twin therefore filtered
+  expanded paths while the database twin compared the caller's real path against the stored
+  form. The caller's path is now put into the stored form before it is compared, and every
+  returned `Path` is expanded back - which is how Jellyfin itself filters by path.
+- Both routes now also accept the placeholder spelling of a directory and answer the same for
+  either form.
+
+### Verified
+- Measured on the reference server before and after, counted on the raw response text
+  because `@(ConvertFrom-Json '[]')` reports 1 and would have faked a hit:
+
+  | path | before: DB / library | after: DB / library |
+  |---|---|---|
+  | `/var/lib/jellyfin/metadata` | 0 / 99005 | 99005 / 99005 |
+  | `/var/lib/jellyfin/data` | 0 / 193 | 193 / 193 |
+  | a real movie folder (control) | 447 / 447 | 447 / 447 |
+
+- **Nothing was ever missing from the database.** Asking the unfixed route for
+  `%MetadataPath%` already returned the same 99005 the twin reported for the expanded path -
+  same rows, different spelling. That equality is what identified the cause.
+- The control that had to stay unchanged did: the movie folder still answers 447 on both
+  routes, with identical id sets.
+
+### Changed
+- The comment claiming `IncludeItemTypes` kept the two routes identical is gone. It was
+  wrong, and it was the reason the defect survived review: the type sets were never the
+  problem, both are built from the same `BaseItemKindNames`.
+
 ## [11.10.0.1] / [12.10.0.1] - 2026-08-10
 
 ### Changed
