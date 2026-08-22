@@ -162,3 +162,35 @@ weeks.
 That one cannot be demonstrated here, and the changelog says so rather than claiming a green
 test. A route with no rows makes a comparison vacuous, and a vacuous comparison that reports
 `ok` is worse than no comparison at all.
+
+### Fixed twice, still wrong: the ancestor
+
+Two releases went out saying the pair agreed. It did not. Asking for `/var/lib/jellyfin` -
+the directory that *contains* the metadata and data directories - gave 10 rows from one half
+and 99,220 from the other.
+
+`ReverseVirtualPath` is an unanchored `Replace`. It rewrites a target that lies at or below
+those directories and leaves an ancestor alone, because neither appears in it as a substring.
+The range was therefore built around the real path, and no range around a real path can reach
+a row stored as `%MetadataPath%/...`. The first fix had not removed the discontinuity; it had
+**moved it up one directory**, into a place nobody thought to look.
+
+And the second fix could not be a bigger range. Under the column's BINARY collation those
+rows sit in disjoint stretches with the media library sorting between them, so one range
+spanning the outermost two returns everything. It needed a different shape: one range per
+stored root.
+
+**The instructive part is the direction the severity moved.** Before: 0 against 99,005 -
+nobody could look at that and think it worked. After: 10 against 99,220 - well-formed,
+plausible, and wrong. The project's own rules name that as the dangerous failure mode, and
+the first fix manufactured one while removing another.
+
+Two habits caught it, and neither was cleverness. Adversarial review of the fix rather than
+of the original bug - the question was "what does this still get wrong", not "does this work".
+And arithmetic: 99,014 + 196 + 10 = 99,220, to the item. A number that closes exactly is worth
+more than an argument that sounds right, and it was the same move that had identified the
+original cause a few hours earlier.
+
+The comment written during the first fix - that the halves "already drew the same rows, they
+just spelled Path differently" - was itself the error, stated as fact in the source and
+shipped. They did not draw the same rows.

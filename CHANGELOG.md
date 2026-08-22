@@ -23,6 +23,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.13.0.0] / [12.13.0.0] - 2026-08-22
+
+### Fixed
+- **`ItemsByPathDB` still disagreed with its twin at any path that *contains* the metadata or
+  data directory rather than lying inside it, and the two previous releases said otherwise.**
+  `ReverseVirtualPath` is an unanchored `Replace`: it rewrites a target at or below those
+  directories and leaves an ancestor untouched, so the range was built around the real path
+  and could not reach a column value beginning `%MetadataPath%`. Measured on 11.11.0.0:
+
+  | path | DB twin | library twin |
+  |---|---:|---:|
+  | `/var/lib` | 10 | 99220 |
+  | `/var/lib/jellyfin` | 10 | 99220 |
+  | `/var/lib/jellyfin/metadata` | 99014 | 99014 |
+  | `/var/lib/jellyfin/data` | 196 | 196 |
+  | `/var/lib/jellyfin/root` | 10 | 10 |
+
+  99014 + 196 + 10 = 99220 exactly - the missing rows were precisely the placeholder-stored
+  ones. **This was the worse kind of defect than the one it replaced**: 0 against 99005 is
+  visibly broken, 10 against 99220 is well-formed and plausible.
+- No single range can cover it, so the shape changed rather than the arithmetic. Under the
+  column's BINARY collation those rows sit in disjoint stretches with the media library
+  sorting between them - `%AppDataPath%/…` < `%MetadataPath%/…` < the media root <
+  `/var/lib/jellyfin/root/…` - so one half-open range spanning the outermost two would return
+  the entire library. The route now scans **one range per stored root**: the target in its
+  stored spelling, plus each placeholder whose real directory lies strictly below the target.
+  An ordinary media path yields exactly one root and issues exactly one query, as before.
+- **The two halves labelled one row differently.** Same id, same name, same path:
+  `ManualPlaylistsFolder` from the library half against `PlaylistsFolder` from the database
+  half, because `GetBaseItemKind()` parses the client-facing `GetClientTypeName()` while the
+  twin reads `ItemTypeLookup`. Both halves now name a row from that one table.
+
+### Verified
+- The multi-range design was checked at id level against the live server before it was
+  written: the ranges do not overlap, and their union is exactly the set the library half
+  returns - 0 rows only on one side, 0 only on the other.
+- The label fix was measured with a control: one mismatch under the data directory, and zero
+  across 447 rows of a real movie folder.
+
+### Changed
+- **Two claims in the previous releases were wrong and are corrected here.** The comment
+  added in 11.11.0.0 - that the halves "already drew the same rows, they just spelled Path
+  differently" - is false: at `/var/lib/jellyfin` they drew 99220 and 10, and those rows were
+  unreachable, not differently spelled. The catalogue text of 11.11.0.0 said the database
+  route "matches ItemsByPath again", which held only at or below the placeholder directories.
+- The placeholder spellings are now a named two-entry list with the reason it cannot be
+  derived: `IServerApplicationPaths`, the interface that names them, is never registered with
+  the container - `ApplicationHost` registers that instance as `IApplicationPaths` alone - so
+  a controller cannot ask for it. Checked, with the registration of `IServerApplicationHost`
+  as the positive control, since that is the one this controller already depends on. The
+  entries are self-checking: a placeholder the server does not substitute expands to itself
+  and is dropped.
+
+### Added
+- A suite check for the ancestor path, derived from `ProgramDataPath` rather than written in,
+  so it also holds on a Windows host or a relocated data directory - with a control that the
+  ancestor really does cover the placeholder rows, since otherwise its agreement would be
+  agreement about nothing.
+
 ## [11.12.0.0] / [12.12.0.0] - 2026-08-22
 
 ### Fixed
