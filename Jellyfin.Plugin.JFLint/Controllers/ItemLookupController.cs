@@ -56,6 +56,29 @@ public class ItemLookupController(
     IDbContextFactory<JellyfinDbContext> dbContextFactory) : ControllerBase
 {
     /// <summary>
+    /// The placeholders Jellyfin substitutes into the <c>Path</c> column.
+    /// </summary>
+    /// <remarks>
+    /// This is a hand-written list, and calling it anything else would be dishonest - but note
+    /// what it lists: two <em>spellings of directories</em>, not item kinds. It says nothing
+    /// about what may be found, and it is the reason no list of kinds is needed anywhere.
+    /// <para>
+    /// It cannot be derived. <see cref="IServerApplicationHost"/> exposes the two conversions
+    /// but not the table behind them, and <c>IServerApplicationPaths</c> - which does name
+    /// both placeholders - is never registered with the container: <c>ApplicationHost</c>
+    /// registers that instance as <c>IApplicationPaths</c> alone, so asking for it would fail
+    /// at runtime. Checked, with the registration of <see cref="IServerApplicationHost"/> as
+    /// the positive control, since that is the one this controller already relies on.
+    /// </para>
+    /// <para>
+    /// The entries are self-checking: a placeholder this server does not substitute comes back
+    /// from <c>ExpandVirtualPath</c> unchanged and is dropped by <see cref="StoredRoots"/>, so
+    /// a stale entry costs nothing and a missing one is the only real risk.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] VirtualPathTokens = ["%AppDataPath%", "%MetadataPath%"];
+
+    /// <summary>
     /// Gets every item at a path or beneath it, via <see cref="ILibraryManager"/>.
     /// </summary>
     /// <remarks>
@@ -104,13 +127,15 @@ public class ItemLookupController(
             IsVirtualItem = false
         });
 
+        var shortNames = ShortTypeNames();
+
         var found = items
             .Where(item => item.Path is not null
                            && (string.Equals(item.Path, target, StringComparison.Ordinal)
                                || item.Path.StartsWith(prefix, StringComparison.Ordinal)))
             .Select(item => new PathItemDto(
                 item.Id,
-                item.GetBaseItemKind().ToString(),
+                ShortTypeNameOf(item, shortNames),
                 item.Name,
                 item.Path));
 
@@ -170,22 +195,26 @@ public class ItemLookupController(
         // 99005 from the twin - and asking this same route for "%MetadataPath%" returned the
         // very same 99005. Nothing was missing; only the spelling differed.
         //
-        // Jellyfin filters by path exactly this way (BaseItemRepository: pathToQuery =
-        // GetPathToSave(filter.Path)), so matching its behaviour is also what keeps us
-        // consistent with whatever it wrote - including the fact that the replacement is
-        // unanchored and would rewrite a media path that merely contains one of the two
-        // directories as a substring.
-        var stored = appHost.ReverseVirtualPath(target);
-
-        // The separator comes from the expanded path: the stored form may be nothing but the
-        // placeholder, which carries no separator to read.
+        // Reversing the caller's path is necessary and NOT sufficient, which cost this route
+        // a second release: ReverseVirtualPath is an unanchored Replace, so it rewrites a
+        // target that lies at or below one of those directories and leaves an ANCESTOR of
+        // them untouched. Asking for /var/lib/jellyfin therefore built a range around the
+        // real path, and no range around a real path can reach a column value that begins
+        // "%MetadataPath%". Measured with only this line in place: 10 rows here against
+        // 99220 from the twin - a well-formed, plausible, wrong answer, which is worse than
+        // the obvious 0 it replaced.
+        //
+        // Nor can one range be widened to cover it. Under the column's BINARY collation the
+        // rows below such an ancestor sit in disjoint stretches with the media library
+        // sorting between them - measured: "%AppDataPath%/..." < "%MetadataPath%/..." <
+        // the media root < "/var/lib/jellyfin/root/...". A single half-open range spanning
+        // the outermost two would swallow the entire library.
+        //
+        // So: one range per stored root, concatenated. Verified against the live server at id
+        // level - the ranges do not overlap, and their union is exactly the set the twin
+        // returns.
         var separator = SeparatorOf(target);
-
-        // The half-open range [stored + separator, stored + (separator + 1)) is exactly
-        // "starts with stored + separator". Anchoring on the separator is what keeps
-        // /Movies/Ring from swallowing /Movies/Ring2.
-        var lower = stored + separator;
-        var upper = stored + (char)(separator + 1);
+        var roots = StoredRoots(target, separator);
 
         var shortNames = ShortTypeNames();
 
@@ -197,32 +226,43 @@ public class ItemLookupController(
         var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (dbContext.ConfigureAwait(false))
         {
-            // CompareTo is culture-sensitive in C#, but it is never executed here: EF
-            // translates it to a plain SQL >= / <, which uses the column's BINARY collation
-            // and is therefore ordinal. EF Core throws rather than evaluating on the client,
-            // so the C# semantics cannot leak in. The ordinal-explicit forms are not an
-            // option - measured, both string.Compare(a, b, StringComparison.Ordinal) and
-            // string.CompareOrdinal fail to translate at all.
-            var rows = await dbContext.BaseItems
-                .AsNoTracking()
-                .Where(item => !item.IsVirtualItem
-                               && item.Path != null
-                               && knownTypes.Contains(item.Type)
-                               && (item.Path == stored
-                                   || (item.Path.CompareTo(lower) >= 0
-                                       && item.Path.CompareTo(upper) < 0)))
-                .Select(item => new { item.Id, item.Type, item.Name, item.Path })
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
+            var found = new List<PathItemDto>();
+            foreach (var root in roots)
+            {
+                // The half-open range [root + separator, root + (separator + 1)) is exactly
+                // "starts with root + separator". Anchoring on the separator is what keeps
+                // /Movies/Ring from swallowing /Movies/Ring2.
+                var lower = root + separator;
+                var upper = root + (char)(separator + 1);
 
-            // Report the expanded form, the same one the twin reports. Without this the two
-            // routes would return the same items under different Path strings, and Sorted()
-            // would even order them differently.
-            var found = rows.Select(row => new PathItemDto(
-                row.Id,
-                shortNames[row.Type],
-                row.Name,
-                row.Path is null ? null : appHost.ExpandVirtualPath(row.Path)));
+                // CompareTo is culture-sensitive in C#, but it is never executed here: EF
+                // translates it to a plain SQL >= / <, which uses the column's BINARY
+                // collation and is therefore ordinal. EF Core throws rather than evaluating
+                // on the client, so the C# semantics cannot leak in. The ordinal-explicit
+                // forms are not an option - measured, both
+                // string.Compare(a, b, StringComparison.Ordinal) and string.CompareOrdinal
+                // fail to translate at all.
+                var rows = await dbContext.BaseItems
+                    .AsNoTracking()
+                    .Where(item => !item.IsVirtualItem
+                                   && item.Path != null
+                                   && knownTypes.Contains(item.Type)
+                                   && (item.Path == root
+                                       || (item.Path.CompareTo(lower) >= 0
+                                           && item.Path.CompareTo(upper) < 0)))
+                    .Select(item => new { item.Id, item.Type, item.Name, item.Path })
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                // Report the expanded form, the same one the twin reports. Without this the
+                // two routes would return the same items under different Path strings, and
+                // Sorted() would even order them differently.
+                found.AddRange(rows.Select(row => new PathItemDto(
+                    row.Id,
+                    shortNames[row.Type],
+                    row.Name,
+                    StoredPath.Expand(appHost, row.Path))));
+            }
 
             return Ok(Sorted(found));
         }
@@ -265,6 +305,81 @@ public class ItemLookupController(
         // belongs to Jellyfin's configuration, not to us, and a trailing separator in it
         // would otherwise reach the comparison.
         return Normalize(appHost.ExpandVirtualPath(trimmed));
+    }
+
+    /// <summary>
+    /// Names an item the same way its database twin does.
+    /// </summary>
+    /// <remarks>
+    /// <c>BaseItem.GetBaseItemKind()</c> parses <c>GetClientTypeName()</c>, which is a
+    /// client-facing label and not always the name the type table carries: measured, the one
+    /// row at the playlists directory came back as <c>ManualPlaylistsFolder</c> from this half
+    /// and <c>PlaylistsFolder</c> from the twin - same id, same name, same path, two labels,
+    /// because <c>PlaylistsFolder.GetClientTypeName()</c> overrides the former while
+    /// <c>ItemTypeLookup</c> holds the latter. Looking the runtime type up in the same table
+    /// the twin uses removes the second source.
+    /// <para>
+    /// The fallback is unreachable for anything the twin can return, since the twin only ever
+    /// returns rows whose type is in that table; it exists so an item outside it is still
+    /// named rather than throwing.
+    /// </para>
+    /// </remarks>
+    /// <param name="item">The materialised item.</param>
+    /// <param name="shortNames">Fully qualified type name to short name.</param>
+    /// <returns>The short type name.</returns>
+    private static string ShortTypeNameOf(BaseItem item, Dictionary<string, string> shortNames)
+    {
+        var typeName = item.GetType().FullName;
+        return typeName is not null && shortNames.TryGetValue(typeName, out var name)
+            ? name
+            : item.GetBaseItemKind().ToString();
+    }
+
+    /// <summary>
+    /// Lists every prefix the stored <c>Path</c> column has to be searched under to cover one
+    /// expanded target.
+    /// </summary>
+    /// <remarks>
+    /// Usually exactly one - the target in its stored spelling - and for any media path that
+    /// is all it ever is, so the ordinary case still issues a single indexed range scan.
+    /// <para>
+    /// The extra entries exist for a target that <em>contains</em> one of the placeholder
+    /// directories rather than lying inside it. <c>ReverseVirtualPath</c> leaves such a target
+    /// alone, because neither directory appears in it as a substring, and no range built from
+    /// it can reach a row stored under a placeholder. Those rows have to be fetched under the
+    /// placeholder itself.
+    /// </para>
+    /// <para>
+    /// "Strictly below" is what keeps the list free of duplicates: a target that <em>is</em>
+    /// one of those directories has already been reversed into the placeholder by the first
+    /// entry.
+    /// </para>
+    /// </remarks>
+    /// <param name="target">The expanded target path.</param>
+    /// <param name="separator">The separator that path uses.</param>
+    /// <returns>The stored prefixes to scan, without duplicates.</returns>
+    private List<string> StoredRoots(string target, char separator)
+    {
+        var roots = new List<string> { appHost.ReverseVirtualPath(target) };
+        var prefix = target + separator;
+
+        foreach (var token in VirtualPathTokens)
+        {
+            // A placeholder this server does not substitute expands to itself; there is no
+            // directory to compare and nothing to add.
+            var directory = appHost.ExpandVirtualPath(token);
+            if (string.Equals(directory, token, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (directory.StartsWith(prefix, StringComparison.Ordinal) && !roots.Contains(token))
+            {
+                roots.Add(token);
+            }
+        }
+
+        return roots;
     }
 
     /// <summary>
