@@ -95,3 +95,42 @@ and it must keep the current code path as a fallback for servers without this pl
 A pull request against Jellyfin itself - adding a `hasParentIndexNumber` filter, for
 which `HasOfficialRating` is an exact template - is the proper general fix, but it
 would land in 12.1 at the earliest and so solves nothing today.
+
+## 2026-08-22 - The pair that stopped being a pair
+
+Every query route here exists twice, `X` and `XDB`, for one reason: each is the other's
+cross-check. A sibling session reported that the two disagreed - `ItemsByPathDB` returned
+0 for `/var/lib/jellyfin/metadata` where `ItemsByPath` returned 99,005 - and relayed a
+proposed fix: restrict the library twin's `IncludeItemTypes` to the ten kinds that carry a
+path, since the divergence "must be" By-Name-Items whose path is synthesised in memory and
+`NULL` in the column.
+
+That explanation was wrong, and so was the fix. It is worth recording why, because the
+wrong version was convincing.
+
+**Three claims collapsed in order.** The type sets were never the problem: both halves
+derive them from the same `BaseItemKindNames`, so restricting one half would have made
+them unequal for the first time. Nor could any list of kinds work - `BaseItemKind.Folder`
+sits on *both* sides, 99 column-backed folders under a movie path and one that is not,
+so any such list either discards real rows or leaves the contradiction. And the column was
+never `NULL`: it holds `%MetadataPath%/Studio/2.0 Entertainment`.
+
+Jellyfin substitutes placeholders for the metadata and data directories on write and
+resolves them on read. The library twin saw the resolved form, the database twin compared
+against the stored one. **Nothing was missing** - asking the unfixed route for
+`%MetadataPath%` returned the same 99,005 the twin reported for the expanded path. Two
+numbers matching to the digit is what turned a hypothesis into a diagnosis.
+
+The fix is the one Jellyfin applies to its own path filter: put the caller's path into
+stored form before comparing, expand what comes back.
+
+### What the near-miss was
+
+Every proposed remedy up to that point - ours included - narrowed what the routes report.
+Each would have made the two numbers agree, and each would have done it by hiding rows
+rather than by finding them. A cross-check that is made to agree by removing what it
+disagrees about is worse than no cross-check, because it still looks like one.
+
+The habit that caught it was cheap and mechanical: measure the object the other party
+named, not one that approximately resembles it, and count on the raw response text -
+`@(ConvertFrom-Json '[]')` reports `1`, which had already made one probe look like a hit.
