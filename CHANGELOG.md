@@ -55,10 +55,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   same rows, different spelling. That equality is what identified the cause.
 - The control that must stay unchanged: the movie folder answers 447 on both routes with
   identical id sets, and has to keep doing so.
-- **Not yet measured after the change**, because the reference server still runs the previous
-  version: the acceptance test is that the first two rows read equal on both routes and the
-  control row is untouched. This entry gets the post-install figures once they exist rather
-  than the expected ones.
+- Measured **after** the change, on 11.11.0.0, with the id sets compared element by element
+  rather than only the totals:
+
+  | path | DB twin | library twin | ids equal |
+  |---|---:|---:|---|
+  | `/var/lib/jellyfin/metadata` | 99011 | 99011 | yes |
+  | `/var/lib/jellyfin/data` | 196 | 196 | yes |
+  | `%MetadataPath%` | 99011 | 99011 | yes |
+  | a real movie folder (control) | 447 | 447 | yes |
+
+- The totals moved against the before-table and both differences are accounted for, because
+  a difference nobody can explain is not a passing test: the metadata figure is `Person`
+  95311 -> 95317 with every other kind unchanged, which is a live server acquiring six
+  people; and the data figure was never 193 - that was the count of the `collections`
+  subfolder, while `/var/lib/jellyfin/data` also holds `Playlist` 2 and `PlaylistsFolder` 1.
+  196 is what the unfixed route already reported for `%AppDataPath%` before any of this.
+- The control is untouched at 447 on both routes, and two consecutive reads of the metadata
+  path return the same figure, so the numbers are stable rather than merely convenient.
 
 ### Changed
 - The comment claiming `IncludeItemTypes` kept the two routes identical is gone. It was
