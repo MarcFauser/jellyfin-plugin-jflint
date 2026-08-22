@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.11.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.11.0.0/jellyfin-plugin-jflint_12.11.0.0.zip",
+        "checksum": "a825a57862aadd90c61dcaf45ec9c5d9",
+        "changelog": "ItemsByPathDB now compares against the path Jellyfin actually stores, so it no longer answers with nothing for items below the metadata and data directories - its result matches ItemsByPath again. Both path routes accept either the real or the placeholder spelling of a directory and return the same set for each.",
+        "timestamp": "2026-08-22T00:08:50Z"
+      },
+      {
         "version": "12.10.0.1",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.10.0.1/jellyfin-plugin-jflint_12.10.0.1.zip",
@@ -126,6 +134,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.11.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.11.0.0/jellyfin-plugin-jflint_11.11.0.0.zip",
+        "checksum": "41324408d9909202a6c01768c19a556f",
+        "changelog": "ItemsByPathDB now compares against the path Jellyfin actually stores, so it no longer answers with nothing for items below the metadata and data directories - its result matches ItemsByPath again. Both path routes accept either the real or the placeholder spelling of a directory and return the same set for each.",
+        "timestamp": "2026-08-22T00:08:50Z"
       },
       {
         "version": "11.10.0.1",
