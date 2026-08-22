@@ -39,20 +39,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   either form.
 
 ### Verified
-- Measured on the reference server before and after, counted on the raw response text
-  because `@(ConvertFrom-Json '[]')` reports 1 and would have faked a hit:
+- Measured on the reference server **before** the change, counted on the raw response text
+  because `@(ConvertFrom-Json '[]')` reports 1 for an empty body and would have faked a hit:
 
-  | path | before: DB / library | after: DB / library |
-  |---|---|---|
-  | `/var/lib/jellyfin/metadata` | 0 / 99005 | 99005 / 99005 |
-  | `/var/lib/jellyfin/data` | 0 / 193 | 193 / 193 |
-  | a real movie folder (control) | 447 / 447 | 447 / 447 |
+  | path | DB twin | library twin |
+  |---|---:|---:|
+  | `/var/lib/jellyfin/metadata` | 0 | 99005 |
+  | `/var/lib/jellyfin/data` | 0 | 193 |
+  | `%MetadataPath%` | 99005 | - |
+  | `%AppDataPath%` | 196 | - |
+  | a real movie folder (control) | 447 | 447 |
 
 - **Nothing was ever missing from the database.** Asking the unfixed route for
   `%MetadataPath%` already returned the same 99005 the twin reported for the expanded path -
   same rows, different spelling. That equality is what identified the cause.
-- The control that had to stay unchanged did: the movie folder still answers 447 on both
-  routes, with identical id sets.
+- The control that must stay unchanged: the movie folder answers 447 on both routes with
+  identical id sets, and has to keep doing so.
+- **Not yet measured after the change**, because the reference server still runs the previous
+  version: the acceptance test is that the first two rows read equal on both routes and the
+  control row is untouched. This entry gets the post-install figures once they exist rather
+  than the expected ones.
 
 ### Changed
 - The comment claiming `IncludeItemTypes` kept the two routes identical is gone. It was
