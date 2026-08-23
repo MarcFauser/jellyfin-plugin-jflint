@@ -184,9 +184,25 @@ if ([string]::IsNullOrWhiteSpace($stampIso))
 }
 else
 {
-    $stampUtc = [datetimeoffset]::Parse($stampIso).UtcDateTime
+    $stampUtc = [datetimeoffset]::Parse($stampIso, [System.Globalization.CultureInfo]::InvariantCulture).UtcDateTime
 }
-$timestamp = $stampUtc.ToString('yyyy-MM-ddTHH:mm:ssZ')
+
+# Both the culture and the quoting are load-bearing, and the second one is the trap: in a
+# .NET format string a bare ':' is not a colon, it is the placeholder for the CURRENT
+# culture's time separator. Measured on this machine - the same instant, three cultures:
+#     de-DE   2026-08-23T14:05:07Z      da-DK   2026-08-23T14.05.07Z      as-IN   ...14.05.07Z
+# 21 installed cultures separate time with something other than ':'. The value was correct
+# here only because de-DE happens to use a colon. This string is written into meta.json and
+# manifest.json, where Jellyfin stores whatever it is handed.
+$timestamp = $stampUtc.ToString("yyyy-MM-dd'T'HH':'mm':'ss'Z'", [System.Globalization.CultureInfo]::InvariantCulture)
+
+# A wrong timestamp looks entirely plausible, so it gets a guard rather than trust. Forced
+# to fire once, by running the old expression under da-DK: it catches '...T14.05.07Z' and
+# passes the escaped form.
+if ($timestamp -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')
+{
+    throw "The timestamp came out as '$timestamp', which is not ISO 8601 UTC. Check the culture."
+}
 
 Write-Host "JFLint  ($pluginId)  timestamp $timestamp" -ForegroundColor Cyan
 
@@ -314,18 +330,59 @@ if ($logo)
     Write-Host "  Logo: $($logo.Name)" -ForegroundColor DarkGray
 }
 
+# The manifest is rewritten on EVERY run, including one without -Publish - and that is the
+# hazard, because the release-already-exists check only runs when publishing. Change the
+# source without raising the version, build once, and the manifest now advertises a checksum
+# that the published ZIP cannot redeem. Jellyfin compares the two before installing
+# (InstallationManager, MD5.HashDataAsync -> InvalidDataException) and simply refuses, with
+# nothing here to explain why.
+#
+# So refuse first. Verified against the live repository the day this was added: all 36
+# published artifacts were downloaded and their MD5 compared, 36 matched and none drifted -
+# this guard exists to keep it that way, not to repair it.
+foreach ($t in $targets)
+{
+    $already = @($package.versions | Where-Object { $_.version -eq $t.Version })
+    if ($already.Count -gt 0 -and $already[0].checksum -ne $t.Checksum)
+    {
+        throw ("Version $($t.Version) is already in manifest.json with checksum $($already[0].checksum), " +
+               "but this build produced $($t.Checksum). The source changed without the version being raised - " +
+               'raise it, or the published release stops installing.')
+    }
+}
+
 # Keep every version that is not being rebuilt right now, then add the fresh ones.
 $rebuilt = $targets.Version
 $kept    = @($package.versions | Where-Object { $rebuilt -notcontains $_.version })
 
 $fresh = foreach ($t in $targets)
 {
+    # A rebuild without -Changelog used to blank the text of a version that is already
+    # published, because every run rewrites the whole manifest. Found by rebuilding an
+    # unchanged 11.13.0.0: the checksums matched to the byte and the changelog went empty,
+    # which is the more dangerous of the two - a wrong checksum stops an install with an
+    # error, a missing changelog just quietly leaves the catalogue entry blank.
+    #
+    # The published text is the truth for a published artifact, so it is kept rather than
+    # the run being refused; a local rebuild is a legitimate thing to do. Kept LOUDLY,
+    # because a silent carry-over is how the empty value got in unnoticed in the first place.
+    $entryChangelog = $Changelog
+    if ([string]::IsNullOrWhiteSpace($entryChangelog))
+    {
+        $previous = @($package.versions | Where-Object { $_.version -eq $t.Version })
+        if ($previous.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($previous[0].changelog))
+        {
+            $entryChangelog = $previous[0].changelog
+            Write-Host "  Keeping the published changelog for $($t.Version) - this run supplied none." -ForegroundColor Yellow
+        }
+    }
+
     [PSCustomObject]@{
         version   = $t.Version
         targetAbi = $t.TargetAbi
         sourceUrl = "https://github.com/$RepoOwner/$RepoName/releases/download/v$($t.Version)/$($t.ZipName)"
         checksum  = $t.Checksum
-        changelog = $Changelog
+        changelog = $entryChangelog
         timestamp = $timestamp
     }
 }

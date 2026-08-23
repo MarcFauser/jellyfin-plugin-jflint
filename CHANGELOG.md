@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- `build.ps1` wrote the `meta.json` / `manifest.json` timestamp with a bare `:` in the format
+  string, which is not a colon but the placeholder for the **current culture's** time
+  separator. Measured on this machine, one instant in three cultures: `de-DE` gives
+  `2026-08-23T14:05:07Z`, `da-DK` and `as-IN` give `2026-08-23T14.05.07Z`. 21 installed
+  cultures separate time with something else, so the value here was correct only because
+  `de-DE` happens to use a colon. Both the parse and the format are now pinned to the
+  invariant culture with the separators quoted, and a guard rejects anything that is not ISO
+  8601 UTC - forced to fire once against the old expression under `da-DK`. Reported by the
+  poster-overlays plugin, which had copied this script.
+- `build.ps1` refuses to rewrite a manifest entry whose version is already listed with a
+  different checksum. Every run rewrites the manifest, including one without `-Publish`, so
+  changing the source without raising the version left a checksum the published ZIP cannot
+  redeem - Jellyfin compares the two and refuses to install. **Verified against the live
+  repository: all 36 published artifacts were downloaded and their MD5 compared, 36 matched,
+  none had drifted.** The guard keeps it that way rather than repairing anything.
+- **A rebuild without `-Changelog` blanked the changelog of an already published version**,
+  found while testing the guard above and worse than the case that prompted it: a wrong
+  checksum stops an install with an error, an emptied changelog just leaves the catalogue
+  entry blank. The published text is now kept when a run supplies none - and kept loudly,
+  since a silent carry-over is how the empty value would go unnoticed again. Supplying
+  `-Changelog` still overwrites, which was checked rather than assumed.
+
 ### Added
 - `build.ps1 -Publish`: creates one GitHub release per artifact and pushes the updated
   `manifest.json`, in that order. A manifest entry whose release does not exist yet is a
