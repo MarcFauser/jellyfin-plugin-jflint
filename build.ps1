@@ -220,9 +220,24 @@ foreach ($t in $targets)
 
     # The server ships the Jellyfin assemblies itself (ExcludeAssets="runtime"), so only
     # our own DLL may travel. Anything else would shadow the server's copy.
-    Get-ChildItem -LiteralPath $stageDir -File |
+    #
+    # -Recurse, and the directories with it. Without it this only ever saw the top level,
+    # while Compress-Archive below packs subdirectories perfectly happily - so anything
+    # publish put in one would ship unnoticed. Two ways in, neither of them visible here:
+    # a package with native assets (those are a different asset group, so ExcludeAssets
+    # ="runtime" does not touch them and publish writes runtimes\win-x64 and friends), and
+    # the likelier one, satellite assemblies - any package with localised resources emits
+    # de\, fr\ and so on. Reported by the poster-overlays plugin, where the flat filter let
+    # 86 MB of native SkiaSharp copies through; measured here on all 36 published packages,
+    # every one of which holds the same five files and nothing else.
+    Get-ChildItem -LiteralPath $stageDir -Recurse -File |
         Where-Object { $_.Name -notlike 'Jellyfin.Plugin.JFLint.*' } |
         Remove-Item -Force
+
+    # Deepest first, so a directory is never removed before what is under it.
+    Get-ChildItem -LiteralPath $stageDir -Recurse -Directory |
+        Sort-Object -Property FullName -Descending |
+        Remove-Item -Recurse -Force
 
     $meta = [ordered]@{
         guid        = $pluginId
@@ -257,8 +272,10 @@ foreach ($t in $targets)
     [System.IO.File]::WriteAllText($metaPath, $metaJson, [System.Text.UTF8Encoding]::new($false))
 
     # Compress-Archive stores each entry's last-write time, so without this the ZIP would
-    # differ on every run even though its contents are identical.
-    Get-ChildItem -LiteralPath $stageDir -File | ForEach-Object { $_.LastWriteTimeUtc = $stampUtc }
+    # differ on every run even though its contents are identical. -Recurse for the same
+    # reason as the cleanup above: a file in a subdirectory would keep its build time and
+    # quietly cost the reproducibility this whole block exists for.
+    Get-ChildItem -LiteralPath $stageDir -Recurse -File | ForEach-Object { $_.LastWriteTimeUtc = $stampUtc }
 
     # The version already identifies the Jellyfin line, so the file name needs no ABI part.
     $zipName = "jellyfin-plugin-jflint_$($t.Version).zip"
@@ -467,6 +484,31 @@ foreach ($t in $targets)
     }
 }
 Write-Host "  ok  checksums and sourceUrl file names match the artifacts"
+
+# 4. What is actually in the package - asserted on the ZIP, not on the staging folder that
+#    produced it. Those are two different questions, and only the second one ships: the
+#    cleanup above can be green while something reaches the archive anyway, which is exactly
+#    how it went wrong in the sibling plugin. Same separation as the two manifest guards -
+#    one checks what was tidied, the other what was delivered.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+foreach ($t in $targets)
+{
+    $archive = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $distDir $t.ZipName))
+    try
+    {
+        $strays = @($archive.Entries |
+            Where-Object { $_.FullName -ne 'meta.json' -and $_.FullName -notlike 'Jellyfin.Plugin.JFLint.*' })
+        if ($strays.Count -gt 0)
+        {
+            throw "$($t.ZipName) contains files that are not ours:`n  $(($strays.FullName) -join "`n  ")"
+        }
+    }
+    finally
+    {
+        $archive.Dispose()
+    }
+}
+Write-Host "  ok  the packages contain nothing but the plugin and its meta.json"
 
 Write-Host ""
 Write-Host "Artifacts in $distDir" -ForegroundColor Cyan

@@ -23,6 +23,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   redeem - Jellyfin compares the two and refuses to install. **Verified against the live
   repository: all 36 published artifacts were downloaded and their MD5 compared, 36 matched,
   none had drifted.** The guard keeps it that way rather than repairing anything.
+- `build.ps1` cleaned the publish output with a flat `Get-ChildItem -File`, while
+  `Compress-Archive` packs subdirectories perfectly happily - so anything `dotnet publish`
+  wrote into one would have shipped unseen. Two ways in, neither visible at the call site: a
+  package with **native** assets (a different asset group, so `ExcludeAssets="runtime"` does
+  not touch it) and, more likely, **satellite assemblies** from any package with localised
+  resources. Now recursive, directories removed deepest-first, and the timestamp pinning is
+  recursive too - a file in a subdirectory would otherwise have kept its build time and cost
+  the reproducibility that block exists for. Reported by the poster-overlays plugin, where
+  the same flat filter let 86 MB of native copies through.
+- **Verified before changing anything: all 36 published packages were downloaded and their
+  contents listed.** Every one holds the same five entries - DLL, PDB, XML, `deps.json`,
+  `meta.json` - and not a single stray. This was a gap, not a defect.
+- Added an assertion on the packed **ZIP** rather than on the staging folder that produced
+  it, because only the second one ships and the cleanup can be green while something reaches
+  the archive anyway. Forced to fire against a real published package with one satellite
+  assembly planted into it: 0 strays before, 1 named stray after.
 - **A rebuild without `-Changelog` blanked the changelog of an already published version**,
   found while testing the guard above and worse than the case that prompted it: a wrong
   checksum stops an install with an error, an emptied changelog just leaves the catalogue
