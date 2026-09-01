@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- `SortEpisodes` and `SortMovies` ended on `Path`, which is not a unique key - **two items on
+  one file is precisely what a duplicate finder exists to surface**. Rows tying on every key
+  fall back to whatever order the source produced, which differs between the two halves and
+  quietly makes the pair incomparable. Both now end on `Id`; the other four sorts already did.
+  Found because the sibling tool hit the same class with a key that ties for every episode of
+  a series: **invisible while there was one source, obvious the moment a second one existed** -
+  its two fallback stages returned the same 145 findings in different orders.
 - `build.ps1` wrote the `meta.json` / `manifest.json` timestamp with a bare `:` in the format
   string, which is not a colon but the placeholder for the **current culture's** time
   separator. Measured on this machine, one instant in three cultures: `de-DE` gives

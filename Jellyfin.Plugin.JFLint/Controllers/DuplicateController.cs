@@ -475,6 +475,13 @@ public class DuplicateController(
             .ThenBy(row => row.SeasonNumber)
             .ThenBy(row => row.EpisodeNumber)
             .ThenBy(row => row.Path, StringComparer.Ordinal)
+            // Id last, so the order is total. Path looks unique enough and is not: two items
+            // on one file is exactly what a duplicate finder exists to surface, and rows that
+            // tie on every key fall back to whatever order the source happened to produce -
+            // which differs between the two halves and makes the pair incomparable. The
+            // sibling tool hit this with a key that ties for every episode of a series;
+            // invisible with one source, obvious the moment a second one arrived.
+            .ThenBy(row => row.Id)
             .ToList();
 
     /// <summary>
@@ -487,6 +494,8 @@ public class DuplicateController(
             .OrderBy(row => row.IdentityKey, StringComparer.Ordinal)
             .ThenBy(row => row.Name, StringComparer.Ordinal)
             .ThenBy(row => row.Path, StringComparer.Ordinal)
+            // Id last, for the reason given on SortEpisodes above.
+            .ThenBy(row => row.Id)
             .ToList();
 
     /// <summary>
