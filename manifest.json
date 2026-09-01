@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.14.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.14.0.0/jellyfin-plugin-jflint_12.14.0.0.zip",
+        "checksum": "3e93fbbc796a0766d375a61fd2b3de9d",
+        "changelog": "Adds GET /JFLint/MediaInfoDB: width, height, video range and video range type for every movie and episode with a video stream, in a single database join. The stock API cannot return the colour range without shipping every media stream of every item. The classification itself is Jellyfin own, taken from its public GetVideoColorRange method rather than reimplemented.",
+        "timestamp": "2026-09-01T11:38:43Z"
+      },
+      {
         "version": "12.13.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.13.0.0/jellyfin-plugin-jflint_12.13.0.0.zip",
@@ -150,6 +158,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.14.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.14.0.0/jellyfin-plugin-jflint_11.14.0.0.zip",
+        "checksum": "12179b0695eca43e82148ce782e21a75",
+        "changelog": "Adds GET /JFLint/MediaInfoDB: width, height, video range and video range type for every movie and episode with a video stream, in a single database join. The stock API cannot return the colour range without shipping every media stream of every item. The classification itself is Jellyfin own, taken from its public GetVideoColorRange method rather than reimplemented.",
+        "timestamp": "2026-09-01T11:38:43Z"
       },
       {
         "version": "11.13.0.0",
