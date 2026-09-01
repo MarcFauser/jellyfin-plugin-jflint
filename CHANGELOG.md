@@ -6,15 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
-
-### Fixed
-- `SortEpisodes` and `SortMovies` ended on `Path`, which is not a unique key - **two items on
-  one file is precisely what a duplicate finder exists to surface**. Rows tying on every key
-  fall back to whatever order the source produced, which differs between the two halves and
-  quietly makes the pair incomparable. Both now end on `Id`; the other four sorts already did.
-  Found because the sibling tool hit the same class with a key that ties for every episode of
-  a series: **invisible while there was one source, obvious the moment a second one existed** -
-  its two fallback stages returned the same 145 findings in different orders.
 - `build.ps1` wrote the `meta.json` / `manifest.json` timestamp with a bare `:` in the format
   string, which is not a colon but the placeholder for the **current culture's** time
   separator. Measured on this machine, one instant in three cultures: `de-DE` gives
@@ -68,6 +59,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   dark dashboard without a background box. Deliberately no new plugin version: the logo
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
+
+## [11.15.0.0] / [12.15.0.0] - 2026-09-01
+
+### Fixed
+- `SortEpisodes` and `SortMovies` ended on `Path`, which is not a unique key - **two items on
+  one file is precisely what a duplicate finder exists to surface**. Rows tying on every key
+  fall back to whatever order the source produced, which differs between the two halves and
+  quietly makes the pair incomparable. Both now end on `Id`; the other four sorts already did.
+- Found because the sibling tool hit the same class with a key that ties for *every* episode
+  of a series: **invisible while one source existed, obvious the moment a second one did** -
+  its two fallback stages returned the same 145 findings in different orders, same size, same
+  content, different hash. The two shapes together are the point: theirs ties systematically
+  and would eventually have been noticed, ours ties rarely and would not have been.
+
+### Verified
+- **The suite never checked the order, and now does.** It compared the two halves as *sorted*
+  id lists - a set check, blind to exactly the fault the shared comparers were added for in
+  11.12.0.0. Measured: `Compare-Object` on `1..5` against `5..1` reports **0** differences.
+  A sequence comparison sits beside the set one, and all eight pairs pass both.
+- That measurement is itself a check in the suite rather than a comment, so the day the
+  behaviour changes, the note reports itself instead of quietly becoming wrong.
+- Honest limit: five of the eight pairs return no rows, where an order check proves as little
+  as any check on an empty set. It carries weight for `PhantomSeason` (45), `FileNameTitle`
+  (316) and `PerEpisodeFolder` (45).
 
 ## [11.14.0.0] / [12.14.0.0] - 2026-09-01
 
