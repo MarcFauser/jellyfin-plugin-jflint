@@ -163,6 +163,41 @@ That one cannot be demonstrated here, and the changelog says so rather than clai
 test. A route with no rows makes a comparison vacuous, and a vacuous comparison that reports
 `ok` is worse than no comparison at all.
 
+## 2026-09-01 - The first route without a twin, and why that is not a lapse
+
+Every query here exists twice. `MediaInfoDB` does not, and the reasoning is worth keeping
+because the convention is otherwise strong enough to follow without thinking.
+
+The request was for a pair. Two measurements turned it into one route.
+
+**There is no bulk read of media streams.** `MediaStreamQuery.ItemId` is a non-nullable
+`Guid`, and `MediaStreamRepository.TranslateQuery` filters on it unconditionally, so
+`IMediaSourceManager.GetMediaStreams` answers about one item at a time. A library-side twin
+would mean tens of thousands of calls, each opening its own database context - slower than
+the 76-second query it was supposed to insure against. An insurance policy that costs more
+than the loss is not insurance.
+
+**And the pair would have checked the wrong thing anyway.** Both halves would end in
+`MediaStream.GetVideoColorRange()`. The sibling session put it precisely, after two sessions
+measured the same figure and mistook it for corroboration: independence holds per component,
+not for a measurement as a whole. Their name comparison really was independent; their stream
+comparison was two transports of one derivation. Had Jellyfin's rule been wrong, both would
+have been wrong identically.
+
+That is what separates this route from the others. The existing pairs put a raw column
+against a materialised property - and that gap is exactly where the `Path` defect lived a
+week earlier. Here there is no gap to exploit, only a faster road to the same answer.
+
+So the route is a **speed-up, not a cross-check**, and its own remarks say so. The distinction
+matters later rather than now: someone will eventually cite a green pair as evidence that the
+HDR values are right, and for this one it would not be.
+
+The derivation itself is not reimplemented. `GetVideoColorRange()` is public, so the eight
+columns it reads are filled into a `MediaStream` and the method is called - Dolby Vision
+profiles, the compatibility ids, HDR10+, the codec tags and the colour transfers all stay
+Jellyfin's business. Copying that decision table into a plugin would have been a second place
+for it to be wrong.
+
 ### Fixed twice, still wrong: the ancestor
 
 Two releases went out saying the pair agreed. It did not. Asking for `/var/lib/jellyfin` -

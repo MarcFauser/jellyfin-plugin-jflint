@@ -62,6 +62,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.14.0.0] / [12.14.0.0] - 2026-09-01
+
+### Added
+- `GET /JFLint/MediaInfoDB` - `Id`, `ItemType`, `Name`, `SeriesName`, `Path`, `Width`,
+  `Height`, `VideoRange`, `VideoRangeType` for every movie and episode with a video stream,
+  in one join. **`BaseItemDto` carries no `VideoRange`** - measured against the running
+  OpenAPI, 153 properties and neither of the two - so the only stock route to it is
+  `Fields=MediaStreams`, which ships every stream of every item: 76 s and 117 MB for the
+  episodes alone, against 15 s and 29 MB for `Fields=Path,Width,Height`.
+- The classification is **Jellyfin's own**. Dolby Vision profiles 5/7/8/10, the RPU and
+  base-layer flags, the compatibility id, HDR10+, the `dovi`/`dvh1`/`dvhe`/`dav1` codec tags
+  and the `smpte2084`/`arib-std-b67` colour transfers are all read by
+  `MediaStream.GetVideoColorRange()`, which is public. The eight columns it reads are filled
+  into a `MediaStream` and the method is called; nothing here reimplements the rule, so it
+  cannot drift from the server's answer. The field list was taken from the whole method,
+  lines 807-878, not from the part that fitted on a screen.
+
+### Changed
+- **This route deliberately has no twin, and the reason is written into it.** Every other
+  query here exists twice so each half checks the other. That is not possible for this one
+  and would be worth little if it were:
+  - *Not possible*: `MediaStreamQuery.ItemId` is a non-nullable `Guid` and
+    `MediaStreamRepository.TranslateQuery` filters on it unconditionally, so
+    `IMediaSourceManager.GetMediaStreams` can only be asked one item at a time - tens of
+    thousands of calls, each opening its own context, which would be **slower than the 76 s
+    fallback it exists to back up**.
+  - *Worth little*: both halves would end in the same `GetVideoColorRange()`. A second
+    transport of one derivation is not a second opinion about it, and a pair that shares its
+    source proves transport rather than truth.
+  A caller therefore falls back to `Fields=MediaStreams`, not to a second route.
+- Only the first video stream per item is reported, ordered by `StreamIndex`. An item may
+  hold several, and reporting each would put one id into the answer more than once.
+
 ## [11.13.0.0] / [12.13.0.0] - 2026-08-22
 
 ### Fixed
