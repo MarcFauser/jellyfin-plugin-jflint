@@ -25,6 +25,15 @@ namespace Jellyfin.Plugin.JFLint;
 /// not a check on that fault.
 /// </para>
 /// <para>
+/// <b>This text is owned here, unlike <see cref="FileNameTitleRule"/>, and the reason is not
+/// direction but where it runs.</b> That rule lives upstream in the calling tool because the
+/// tool executes it; this one has no caller there yet. A predicate sitting in a repository that
+/// never invokes it is dead code, and dead code is removed at the next tidy-up - which would
+/// break the coupling exactly where it is meant to hold. The tool copies this verbatim when it
+/// grows a tab for the finding. Agreed with that session on 2026-09-03; "upstream first" is
+/// shorthand for "wherever it runs", not for a fixed direction.
+/// </para>
+/// <para>
 /// <b>The judgement is on the file name, not the folder.</b> Measured on 2368 films: a folder
 /// criterion (<c>Sxx</c> without an episode number, which is what a season folder carries)
 /// would have added exactly two rows, and both are false - <c>Gintama.S00.The.Movie.1</c> and

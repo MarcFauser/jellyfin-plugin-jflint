@@ -100,17 +100,42 @@ public static class FileNameTitleRule
         => providerKeys is not null && providerKeys.Any(RealProviderIds.Contains);
 
     /// <summary>
-    /// Half A: the title reads as a dotted file name.
+    /// Half A: the title reads as a file name, dotted or hyphenated.
     /// </summary>
     /// <param name="name">The entry's name.</param>
     /// <returns>True when it does.</returns>
     /// <remarks>
+    /// <para>
     /// The "length >= 2" floor is what spares acronyms: <c>S.W.A.T.</c> has four dots and no
     /// piece of two characters, so it never reaches three.
+    /// </para>
+    /// <para>
+    /// <b>The hyphen branch was added upstream on 2026-09-03 and is ported here verbatim.</b>
+    /// A hyphen-separated release name - <c>tvr-lots-s02e01</c>, <c>tmsf-highscore-s01e01</c> -
+    /// carries no dots at all and was invisible to this rule. It came to light from this side:
+    /// <see cref="Models.LayoutFindingKind.EpisodeShapedMovie"/> reported 22 misfiled
+    /// documentary episodes and this rule saw only 16 of them, one whole folder missing.
+    /// </para>
+    /// <para>
+    /// <b>On hyphens alone the rule is too coarse, and the extra condition is case.</b>
+    /// Measured upstream over 44,528 titles, hyphens add 85 rows of which 19 are real German
+    /// episode titles - <c>Gute-Nacht-Geschichten</c>, <c>Kopf-An-Kopf-Rennen</c>,
+    /// <c>Papier-Blüten-Träume</c>. What separates the two sets without exception is that a
+    /// German compound is capitalised and a scene release is not. With the lower-case
+    /// condition the same measurement gives 66 rows, every one a release name, and leaves the
+    /// dotted findings untouched. The accepted false positive is <c>ai-mai-mi</c>, a
+    /// lower-case title that really does carry hyphens.
+    /// </para>
+    /// <para>
+    /// <b>Case-sensitive on the hyphen half only.</b> A dotted release name is usually
+    /// capitalised (<c>Mr.Robot.S03E02.German…</c>), so the same condition on the dotted half
+    /// would empty the finding entirely.
+    /// </para>
     /// <para>
     /// Public because <see cref="Models.LayoutFindingKind.PerEpisodeFolder"/> asks the same
     /// question of a season's name. Sharing the predicate is the point: two rules that look
-    /// alike are two rules that drift apart.
+    /// alike are two rules that drift apart - and it means a change here moves that finding
+    /// too, which is intended rather than a side effect.
     /// </para>
     /// </remarks>
     public static bool LooksLikeAFileName(string name)
@@ -122,13 +147,27 @@ public static class FileNameTitleRule
             return false;
         }
 
-        var dots = name.Length - name.Replace(".", string.Empty, StringComparison.Ordinal).Length;
-        if (dots < 2)
+        // Dots OR hyphens, and the hyphen half additionally demands lower case - see the
+        // remarks above for why that one extra condition is what makes it usable.
+        return Separated(name, '.')
+               || (Separated(name, '-') && !name.Any(char.IsUpper));
+    }
+
+    /// <summary>
+    /// Whether a name falls apart into release-name pieces on one separator.
+    /// </summary>
+    /// <param name="name">The entry's name.</param>
+    /// <param name="separator">The character to split on.</param>
+    /// <returns>True for two or more separators and three or more pieces that are words.</returns>
+    private static bool Separated(string name, char separator)
+    {
+        var count = name.Length - name.Replace(separator.ToString(), string.Empty, StringComparison.Ordinal).Length;
+        if (count < 2)
         {
             return false;
         }
 
-        return name.Split('.').Count(piece => piece.Length >= 2) >= 3;
+        return name.Split(separator).Count(piece => piece.Length >= 2) >= 3;
     }
 
     /// <summary>

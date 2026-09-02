@@ -79,6 +79,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.18.0.0] / [12.18.0.0] - 2026-09-03
+
+### Changed
+- `FileNameTitleRule.LooksLikeAFileName` now also reports **hyphen**-separated names, ported
+  verbatim from the calling tool where it was added the same day. The rule knew only the dotted
+  form, so a release like `tvr-lots-s02e01` or `tmsf-highscore-s01e01` carries no dot, does not
+  equal its leaf either once Jellyfin has stripped `-1080p`, and was invisible.
+- **The hyphen half additionally requires lower case, and that one condition is what makes it
+  usable.** Measured upstream over 44,528 titles: hyphens alone add 85 rows of which 19 are real
+  German episode titles - `Gute-Nacht-Geschichten`, `Kopf-An-Kopf-Rennen`,
+  `Papier-Blüten-Träume`. A German compound is capitalised and a scene release is not, and that
+  separates the two sets without exception. With the condition the same measurement gives 66,
+  every one a release name. The accepted false positive is `ai-mai-mi`, named in the vectors so
+  nobody later reports it as a defect.
+- The condition applies to the hyphen half **only**. A dotted release name is usually
+  capitalised (`Mr.Robot.S03E02.German…`), so the same test on the dotted half would empty the
+  finding. One vector holds each side of that.
+
+### Fixed
+- The database half's SQL pre-filter would have dropped exactly the rows the new branch adds.
+  It admitted a name containing a dot, or one that is its own path leaf; a hyphen-separated
+  name is neither. The library half pre-filters nothing, so the two would have disagreed - and
+  it would have read as a defect in the port rather than in the `WHERE`. **A filter one half
+  applies and the other does not is how a pair stops being a control**, which this file says of
+  the twin routes and had quietly broken in its own query. Found before shipping by asking what
+  the pre-filter admits, not by running it.
+
+### Verified
+- The ported rule was run over all 44,561 library items and reports **232** - the same number
+  the calling tool's independently written fallback computes over the same library. Two
+  implementations agreeing to the row is stronger than either alone, and it is what the port
+  exists to preserve.
+- Eleven vectors for the shape itself, including all three German compounds, the accepted false
+  positive, the dotted capitalised name that must stay reported, and the floors. The control is
+  one string in two spellings - `abc-def-ghi` reported, `Abc-Def-Ghi` passed - which is the
+  sharpest form available for a condition that turns on case alone.
+- `PerEpisodeFolder` shares the predicate and was checked rather than assumed: it stays at 0,
+  because only seven season rows on this library have a path at all.
+
 ## [11.17.0.0] / [12.17.0.0] - 2026-09-03
 
 ### Added

@@ -525,7 +525,16 @@ public class LibraryLayoutController(
                 .Where(item => wantedTypes.Contains(item.Type)
                                && !item.IsVirtualItem
                                && !string.IsNullOrEmpty(item.Name))
+                // A superset of what the rule can report, never a second rule. The hyphen
+                // clause was added with the hyphen branch of LooksLikeAFileName on 2026-09-03:
+                // without it a name like tmsf-highscore-s01e01 carries no dot, does not equal
+                // its leaf either (Jellyfin stripped -1080p), and would be dropped here before
+                // the rule ever saw it - while the library half, which pre-filters nothing,
+                // reported it. That is not a narrower answer, it is the pair silently ceasing
+                // to be a control, and it would have read as a defect in the port rather than
+                // in this WHERE.
                 .Where(item => EF.Functions.Like(item.Name!, "%.%")
+                               || EF.Functions.Like(item.Name!, "%-%")
                                || (item.Path != null
                                    && (item.Path.EndsWith("/" + item.Name)
                                        || item.Path.EndsWith("\\" + item.Name)
