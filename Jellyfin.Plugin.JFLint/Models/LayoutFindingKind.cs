@@ -64,4 +64,23 @@ public static class LayoutFindingKind
     /// </para>
     /// </remarks>
     public const string PerEpisodeFolder = nameof(PerEpisodeFolder);
+
+    /// <summary>
+    /// Two or more series merged onto one grouping key that cannot be a real provider id.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Sharing a key is normal - that is how one series spread over several release folders
+    /// stays one series. What is reported here is sharing a key built from an id that could
+    /// not identify anything: a <c>Tvdb</c> id that is not a positive integer, an
+    /// <c>Imdb</c> id that is not <c>tt</c> plus digits. A sentinel like <c>-1</c>, written
+    /// into two NFOs precisely to stop a merge, matches itself and causes one.
+    /// </para>
+    /// <para>
+    /// A custom id is never reported: it is opaque by design and any value is legitimate.
+    /// See <see cref="GroupingKeyRule"/> for why the judgement is made on the row's provider
+    /// id rather than on the key, which cannot be parsed back apart.
+    /// </para>
+    /// </remarks>
+    public const string ImplausibleGroupingKey = nameof(ImplausibleGroupingKey);
 }

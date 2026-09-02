@@ -79,6 +79,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.16.0.0] / [12.16.0.0] - 2026-09-02
+
+### Added
+- `GET /JFLint/ImplausibleGroupingKey` and `…DB` - series merged onto a grouping key that
+  cannot be a real provider id. **Sharing a key is normal and is not reported**: it is how one
+  series spread over several release folders stays one series, and seventeen keys do that
+  legitimately here. Reported is a shared key built from an id that could not identify
+  anything - which is what happens when a sentinel is written into two NFOs to *prevent* a
+  merge and matches itself instead. Jellyfin logs such a merge with no line at all.
+- **The judgement is on the row's provider id, never on the key.** `Series.GetUserDataKeys`
+  inserts Imdb, then Tvdb, then Custom at position 0, so the leading id is Custom if present,
+  else Tvdb, else Imdb; `CreatePresentationUniqueKey` then appends the metadata language and
+  every library folder guid. The key is a composite and cannot be split back apart - a custom
+  id may contain hyphens itself, as `v-1984-final-battle` does. Read from the source, not
+  assumed.
+- **Plausible means something different per provider, and that is the point of the rule.**
+  Tvdb ids are positive integers, so `-1` and `0` are impossible; Imdb ids are `tt` plus
+  digits; a **custom id is opaque by design and is never reported**. A "looks odd" filter
+  would have flagged every legitimate custom merge group from the day that plugin was
+  installed - the kind of false alarm that gets a check ignored. Where none of the three
+  provider ids led the key, the rule stays silent rather than judging what it cannot see.
+
+### Verified
+- The route answers **0** on this library and always will while every merge on it is
+  legitimate, so the rule is exercised directly against the built assembly instead: thirteen
+  vectors, both directions, including the two that keep it honest - `Custom` with
+  `v-1984-final-battle` and `Custom` with `-1` must both pass, the second being the very value
+  that caused the original merge when it sat in a `Tvdb` field.
+- A route whose only observed answer is zero proves nothing about itself. That is said in the
+  suite rather than left implied.
+- The two halves are a real pair here rather than two transports of one answer: the library
+  half asks each series to **compute** its presentation key, the database half reads the
+  **stored** one. Agreement means the two are in step; disagreement would be a finding.
+
 ## [11.15.0.0] / [12.15.0.0] - 2026-09-01
 
 ### Fixed

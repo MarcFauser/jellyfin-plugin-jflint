@@ -142,6 +142,23 @@ public class LibraryLayoutController(
         => Ok(FindingsOfKind(LayoutFindingKind.PerEpisodeFolder));
 
     /// <summary>
+    /// Gets series merged onto a grouping key that cannot be a real id, via
+    /// <see cref="ILibraryManager"/>.
+    /// </summary>
+    /// <remarks>
+    /// The safe twin of <see cref="GetImplausibleGroupingKeysFromDatabaseAsync"/>, and here
+    /// the pair earns its keep twice over: this half asks each series to <b>compute</b> its
+    /// presentation key, the other reads the <b>stored</b> one. They agreeing says the two
+    /// are in step; they disagreeing would be a finding in its own right.
+    /// </remarks>
+    /// <response code="200">Findings returned.</response>
+    /// <returns>One row per series in an implausibly merged group.</returns>
+    [HttpGet("ImplausibleGroupingKey")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<LayoutFindingDto>> GetImplausibleGroupingKeys()
+        => Ok(FindingsOfKind(LayoutFindingKind.ImplausibleGroupingKey));
+
+    /// <summary>
     /// Gets season folders without a readable number that do hold files, straight from the
     /// database.
     /// </summary>
@@ -614,6 +631,99 @@ public class LibraryLayoutController(
     }
 
     /// <summary>
+    /// Gets every group of series merged onto a grouping key that cannot be a real id,
+    /// straight from the database.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Sharing a key is the normal case and is not reported: it is how one series spread over
+    /// several release folders stays one series - on the reference library seventeen keys do
+    /// that legitimately. Reported is a shared key built from an id that could not identify
+    /// anything, which is what a sentinel written into two NFOs produces.
+    /// </para>
+    /// <para>
+    /// The judgement is on the row's provider id, never on the key - see
+    /// <see cref="GroupingKeyRule"/>: the key is the id plus the metadata language plus every
+    /// library folder guid, and a custom id may contain hyphens itself, so it cannot be split
+    /// back apart.
+    /// </para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <response code="200">Findings returned.</response>
+    /// <returns>One row per series in an implausibly merged group.</returns>
+    [HttpGet("ImplausibleGroupingKeyDB")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<LayoutFindingDto>>> GetImplausibleGroupingKeysFromDatabaseAsync(
+        CancellationToken cancellationToken)
+    {
+        var seriesType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Series];
+
+        var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using (dbContext.ConfigureAwait(false))
+        {
+            var rows = await dbContext.BaseItems
+                .AsNoTracking()
+                .Where(item => item.Type == seriesType
+                               && !item.IsVirtualItem
+                               && !string.IsNullOrEmpty(item.PresentationUniqueKey))
+                .Select(item => new
+                {
+                    item.Id,
+                    item.Name,
+                    item.Path,
+                    item.PresentationUniqueKey,
+                    Providers = item.Provider!
+                        .Select(provider => new { provider.ProviderId, provider.ProviderValue })
+                        .ToList()
+                })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var findings = new List<LayoutFindingDto>();
+            foreach (var group in rows.GroupBy(row => row.PresentationUniqueKey, StringComparer.Ordinal))
+            {
+                if (group.Count() < 2)
+                {
+                    continue;
+                }
+
+                foreach (var row in group)
+                {
+                    var providerIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var provider in row.Providers)
+                    {
+                        if (!string.IsNullOrEmpty(provider.ProviderId) && !string.IsNullOrEmpty(provider.ProviderValue))
+                        {
+                            providerIds[provider.ProviderId] = provider.ProviderValue;
+                        }
+                    }
+
+                    var source = GroupingKeyRule.LeadingProvider(providerIds, out var value);
+                    var reason = GroupingKeyRule.ImplausibleReason(source, value);
+                    if (reason is null)
+                    {
+                        continue;
+                    }
+
+                    findings.Add(new LayoutFindingDto
+                    {
+                        Kind = LayoutFindingKind.ImplausibleGroupingKey,
+                        ItemId = row.Id,
+                        ItemType = SeriesTypeName,
+                        Name = row.Name,
+                        SeriesName = row.Name,
+                        Path = StoredPath.Expand(appHost, row.Path),
+                        GroupSize = group.Count(),
+                        Reasons = [reason, $"leading id from {source}", $"key {group.Key}"]
+                    });
+                }
+            }
+
+            return Ok(Sorted(findings));
+        }
+    }
+
+    /// <summary>
     /// Turns a stored, fully qualified type name into the short one the responses carry.
     /// </summary>
     /// <param name="storedType">The value of <c>BaseItemEntity.Type</c>.</param>
@@ -715,7 +825,56 @@ public class LibraryLayoutController(
         AddOrphanedItemFindings(findings, allSeries, allSeasons, allEpisodes);
         AddFileNameTitleFindings(findings, allSeries, allSeasons, allEpisodes, allMovies);
         AddPerEpisodeFolderFindings(findings, allSeasons);
+        AddImplausibleGroupingKeyFindings(findings, allSeries);
         return findings;
+    }
+
+    /// <summary>
+    /// Adds the series merged onto a grouping key that cannot be a real provider id.
+    /// </summary>
+    /// <remarks>
+    /// Reads <c>GetPresentationUniqueKey()</c> rather than the column, which is the whole
+    /// point of this half: the twin compares the stored value, and if Jellyfin ever computed
+    /// the key differently from what it persisted, the pair would say so.
+    /// </remarks>
+    /// <param name="findings">The list to add to.</param>
+    /// <param name="series">Every series in the library.</param>
+    private static void AddImplausibleGroupingKeyFindings(List<LayoutFindingDto> findings, List<Series> series)
+    {
+        var groups = series
+            .Where(one => !one.IsVirtualItem && !string.IsNullOrEmpty(one.GetPresentationUniqueKey()))
+            .GroupBy(one => one.GetPresentationUniqueKey(), StringComparer.Ordinal);
+
+        foreach (var group in groups)
+        {
+            var members = group.ToList();
+            if (members.Count < 2)
+            {
+                continue;
+            }
+
+            foreach (var one in members)
+            {
+                var source = GroupingKeyRule.LeadingProvider(one.ProviderIds, out var value);
+                var reason = GroupingKeyRule.ImplausibleReason(source, value);
+                if (reason is null)
+                {
+                    continue;
+                }
+
+                findings.Add(new LayoutFindingDto
+                {
+                    Kind = LayoutFindingKind.ImplausibleGroupingKey,
+                    ItemId = one.Id,
+                    ItemType = SeriesTypeName,
+                    Name = one.Name,
+                    SeriesName = one.Name,
+                    Path = one.Path,
+                    GroupSize = members.Count,
+                    Reasons = [reason, $"leading id from {source}", $"key {group.Key}"]
+                });
+            }
+        }
     }
 
     /// <summary>
