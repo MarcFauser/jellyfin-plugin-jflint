@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.16.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.16.0.0/jellyfin-plugin-jflint_12.16.0.0.zip",
+        "checksum": "6eb62e6eab7f2e83a502de31dbbf9c37",
+        "changelog": "Adds GET /JFLint/ImplausibleGroupingKey and its database twin: series that Jellyfin merged onto one grouping key built from an id that cannot be a real one, such as a sentinel written into two NFOs to prevent a merge and matching itself instead. Sharing a key is normal and is not reported. What counts as a real id differs per provider, and a custom id is opaque by design and never reported.",
+        "timestamp": "2026-09-02T12:05:46Z"
+      },
+      {
         "version": "12.15.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.15.0.0/jellyfin-plugin-jflint_12.15.0.0.zip",
@@ -166,6 +174,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.16.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.16.0.0/jellyfin-plugin-jflint_11.16.0.0.zip",
+        "checksum": "080867596954e539cfc38041111a6c71",
+        "changelog": "Adds GET /JFLint/ImplausibleGroupingKey and its database twin: series that Jellyfin merged onto one grouping key built from an id that cannot be a real one, such as a sentinel written into two NFOs to prevent a merge and matching itself instead. Sharing a key is normal and is not reported. What counts as a real id differs per provider, and a custom id is opaque by design and never reported.",
+        "timestamp": "2026-09-02T12:05:46Z"
       },
       {
         "version": "11.15.0.0",
