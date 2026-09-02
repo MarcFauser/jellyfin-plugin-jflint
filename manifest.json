@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.18.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.18.0.0/jellyfin-plugin-jflint_12.18.0.0.zip",
+        "checksum": "4db3cd86a197582e7e331d4ef0a5fbde",
+        "changelog": "Ports the hyphen branch of the shared file-name rule from the calling tool: a release name separated by hyphens rather than dots - tvr-lots-s02e01 - carries no dot and was invisible to FileNameTitle. The hyphen half additionally requires lower case, which separates scene releases from real German compound titles without exception. Also widens the database half pre-filter, which would otherwise have dropped exactly those rows before the rule saw them while the library half reported them.",
+        "timestamp": "2026-09-02T23:23:36Z"
+      },
+      {
         "version": "12.17.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.17.0.0/jellyfin-plugin-jflint_12.17.0.0.zip",
@@ -182,6 +190,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.18.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.18.0.0/jellyfin-plugin-jflint_11.18.0.0.zip",
+        "checksum": "bfb2a7e9b4cab4cc778c93cc2bf8bed5",
+        "changelog": "Ports the hyphen branch of the shared file-name rule from the calling tool: a release name separated by hyphens rather than dots - tvr-lots-s02e01 - carries no dot and was invisible to FileNameTitle. The hyphen half additionally requires lower case, which separates scene releases from real German compound titles without exception. Also widens the database half pre-filter, which would otherwise have dropped exactly those rows before the rule saw them while the library half reported them.",
+        "timestamp": "2026-09-02T23:23:36Z"
       },
       {
         "version": "11.17.0.0",
