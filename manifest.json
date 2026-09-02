@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.17.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.17.0.0/jellyfin-plugin-jflint_12.17.0.0.zip",
+        "checksum": "cd1166367c59cdc22483cea0bc343cf3",
+        "changelog": "Adds GET /JFLint/EpisodeShapedMovie and the DB twin: an item resolved as a film whose file name carries a season and episode number - one episode of a series filed as a movie, which a mixed library produces per folder. Previously visible only where such episodes happened to collide into a duplicate group; one of the four folders on the reference library produced no collision and was invisible. The judgement is on the file name rather than the folder, measured: a folder criterion would have added two false rows and no true ones.",
+        "timestamp": "2026-09-02T23:14:54Z"
+      },
+      {
         "version": "12.16.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.16.0.0/jellyfin-plugin-jflint_12.16.0.0.zip",
@@ -174,6 +182,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.17.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.17.0.0/jellyfin-plugin-jflint_11.17.0.0.zip",
+        "checksum": "bf7b1695004298e29698b86878aaaf62",
+        "changelog": "Adds GET /JFLint/EpisodeShapedMovie and the DB twin: an item resolved as a film whose file name carries a season and episode number - one episode of a series filed as a movie, which a mixed library produces per folder. Previously visible only where such episodes happened to collide into a duplicate group; one of the four folders on the reference library produced no collision and was invisible. The judgement is on the file name rather than the folder, measured: a folder criterion would have added two false rows and no true ones.",
+        "timestamp": "2026-09-02T23:14:54Z"
       },
       {
         "version": "11.16.0.0",
