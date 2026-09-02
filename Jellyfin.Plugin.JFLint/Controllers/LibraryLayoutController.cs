@@ -159,6 +159,16 @@ public class LibraryLayoutController(
         => Ok(FindingsOfKind(LayoutFindingKind.ImplausibleGroupingKey));
 
     /// <summary>
+    /// Gets films whose file name names an episode, via <see cref="ILibraryManager"/>.
+    /// </summary>
+    /// <response code="200">Findings returned.</response>
+    /// <returns>One row per film, not per folder - the roll-up is the caller's.</returns>
+    [HttpGet("EpisodeShapedMovie")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<LayoutFindingDto>> GetEpisodeShapedMovies()
+        => Ok(FindingsOfKind(LayoutFindingKind.EpisodeShapedMovie));
+
+    /// <summary>
     /// Gets season folders without a readable number that do hold files, straight from the
     /// database.
     /// </summary>
@@ -724,6 +734,77 @@ public class LibraryLayoutController(
     }
 
     /// <summary>
+    /// Gets films whose file name names an episode, straight from the database.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The whole judgement runs in memory rather than in SQL, and that is deliberate: the rule
+    /// is a regular expression, which SQLite cannot be handed, and any <c>LIKE</c> narrowing
+    /// written to pre-filter would be a second, looser rule that only this half applies. A
+    /// filter the twin does not share is exactly how the pair stops being a control - so the
+    /// query fetches every film's path and the shared rule decides, on 2368 rows here.
+    /// </para>
+    /// <para>
+    /// The path is expanded before the rule sees it, not merely before it is reported: the
+    /// other half feeds the rule a materialised item's <c>Path</c>, which Jellyfin has already
+    /// expanded, so anything else would hand one rule two different inputs. See
+    /// <see cref="StoredPath"/>.
+    /// </para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <response code="200">Findings returned.</response>
+    /// <returns>One row per film.</returns>
+    [HttpGet("EpisodeShapedMovieDB")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<LayoutFindingDto>>> GetEpisodeShapedMoviesFromDatabaseAsync(
+        CancellationToken cancellationToken)
+    {
+        var movieType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Movie];
+
+        var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using (dbContext.ConfigureAwait(false))
+        {
+            var rows = await dbContext.BaseItems
+                .AsNoTracking()
+                .Where(item => item.Type == movieType
+                               && !item.IsVirtualItem
+                               && !string.IsNullOrEmpty(item.Path))
+                .Select(item => new
+                {
+                    item.Id,
+                    item.Name,
+                    item.Path
+                })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var findings = new List<LayoutFindingDto>();
+            foreach (var row in rows)
+            {
+                var path = StoredPath.Expand(appHost, row.Path);
+                var reasons = EpisodeShapedMovieRule.Evaluate(path);
+                if (reasons.Count == 0)
+                {
+                    continue;
+                }
+
+                findings.Add(new LayoutFindingDto
+                {
+                    Kind = LayoutFindingKind.EpisodeShapedMovie,
+                    ItemId = row.Id,
+                    ItemType = MovieTypeName,
+                    Name = row.Name,
+                    SeriesName = null,
+                    Path = path,
+                    Reasons = reasons
+                });
+            }
+
+            return Ok(Sorted(findings));
+        }
+    }
+
+    /// <summary>
     /// Turns a stored, fully qualified type name into the short one the responses carry.
     /// </summary>
     /// <param name="storedType">The value of <c>BaseItemEntity.Type</c>.</param>
@@ -771,7 +852,7 @@ public class LibraryLayoutController(
             .ToList();
 
     /// <summary>
-    /// Builds the findings for one kind. All five routes share
+    /// Builds the findings for one kind. Every library-half route shares
     /// <see cref="BuildFindingsFromLibrary"/>, so a single request materialises the library
     /// once however many kinds it asks about.
     /// </summary>
@@ -781,7 +862,7 @@ public class LibraryLayoutController(
         => Sorted(BuildFindingsFromLibrary().Where(finding => string.Equals(finding.Kind, kind, StringComparison.Ordinal)));
 
     /// <summary>
-    /// Computes all five findings from the object model. This is the slow route: it
+    /// Computes every finding from the object model. This is the slow route: it
     /// materialises every series, season and episode. It exists because it only touches
     /// promised interfaces and therefore survives a database schema change - and because
     /// it is the cross-check for the database routes.
@@ -809,7 +890,7 @@ public class LibraryLayoutController(
             Recursive = true
         }).OfType<Episode>().ToList();
 
-        // Only FileNameTitle looks at movies, and it is the only kind that does. The cost is
+        // FileNameTitle and EpisodeShapedMovie are the kinds that look at movies. The cost is
         // one extra query per request on this shared build; the alternative is a second
         // materialisation path, which is how two halves start to disagree.
         var allMovies = libraryManager.GetItemList(new InternalItemsQuery
@@ -826,7 +907,46 @@ public class LibraryLayoutController(
         AddFileNameTitleFindings(findings, allSeries, allSeasons, allEpisodes, allMovies);
         AddPerEpisodeFolderFindings(findings, allSeasons);
         AddImplausibleGroupingKeyFindings(findings, allSeries);
+        AddEpisodeShapedMovieFindings(findings, allMovies);
         return findings;
+    }
+
+    /// <summary>
+    /// Adds the films whose file name names an episode.
+    /// </summary>
+    /// <remarks>
+    /// Reads <c>item.Path</c> as the object model hands it out - already expanded - which is
+    /// why the twin has to expand the stored column before it asks the same question. Feeding
+    /// one rule two different inputs is how a pair stops being a control.
+    /// </remarks>
+    /// <param name="findings">The list to add to.</param>
+    /// <param name="movies">Every film in the library.</param>
+    private static void AddEpisodeShapedMovieFindings(List<LayoutFindingDto> findings, List<BaseItem> movies)
+    {
+        foreach (var movie in movies)
+        {
+            if (movie.IsVirtualItem)
+            {
+                continue;
+            }
+
+            var reasons = EpisodeShapedMovieRule.Evaluate(movie.Path);
+            if (reasons.Count == 0)
+            {
+                continue;
+            }
+
+            findings.Add(new LayoutFindingDto
+            {
+                Kind = LayoutFindingKind.EpisodeShapedMovie,
+                ItemId = movie.Id,
+                ItemType = MovieTypeName,
+                Name = movie.Name,
+                SeriesName = null,
+                Path = movie.Path,
+                Reasons = reasons
+            });
+        }
     }
 
     /// <summary>

@@ -79,6 +79,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.17.0.0] / [12.17.0.0] - 2026-09-03
+
+### Added
+- `GET /JFLint/EpisodeShapedMovie` and `…DB` - an item Jellyfin resolved as a film whose file
+  name carries a season and episode number. A **mixed** library, one with no `CollectionType`,
+  has Jellyfin decide per folder whether it holds a film or a series, and for a season folder it
+  sometimes decides "film"; every episode then becomes its own movie.
+- **Why it is not covered by an existing route.** Until now this was visible only where those
+  episodes happened to resolve to one provider id and so surfaced as a duplicate group. Measured
+  here: four such folders exist, `DuplicateMovie` sees three of them - the fourth produces no
+  collision at all and was invisible. *A check that finds a fault only where it happens to trip
+  another check is not a check on that fault.* Raised by the calling tool's session, which
+  measured the fourth folder independently.
+- **Nor is it a stricter `FileNameTitle`.** That asks whether a title is only a file name, this
+  asks whether the **type** is wrong; 16 of the 22 rows here are reported by both, and the two
+  want different repairs - a rename against moving the folder into a series library. The six
+  reported *only* here are the argument for the kind: their names are hyphen-separated, and the
+  dotted-name rule cannot see them. That gap in `FileNameTitleRule` is real and is deliberately
+  **not** fixed on this side - the file is a verbatim port, and its two halves are a control for
+  the calling tool only while all three agree on every row. It has been reported upstream.
+
+### Verified
+- **The judgement is on the file name, not the folder, and that was measured rather than
+  chosen.** Across 2368 films a folder criterion (`Sxx` without an episode number, which is what
+  a season folder carries) would have added exactly two rows, and both are wrong:
+  `Gintama.S00.The.Movie.1` and its sequel are genuine films whose release group used `S00` as a
+  specials marker. Two false and none true is not a trade. Both are kept as suite vectors so the
+  idea is not reintroduced.
+- The pattern accepts the separated conventions `S01.E01` and `S01-E01`, which the shorter
+  `S\d{1,2}E\d{1,3}` token already in `FileNameTitleRule.Evidence` misses, and refuses a match
+  embedded without boundaries, which is where false positives begin. On this library the two are
+  **exactly equal** - 22 rows either way - so the stricter form costs nothing now and covers more
+  later. Recorded because two season/episode patterns now exist in the source for different jobs,
+  and that is a decision rather than an oversight.
+- The compiled rule was run against all 2368 films and reports **22**, matching an independent
+  measurement made in PowerShell before the code existed. Fourteen vectors cover both directions,
+  both path separators, and the two folder-criterion false positives.
+- The database half runs the whole judgement in memory on purpose. The rule is a regular
+  expression, which SQLite cannot be handed, and any `LIKE` narrowing added to pre-filter would
+  be a second, looser rule applied by one half only - which is how a pair stops being a control.
+  The stored path is expanded before the rule sees it, since the other half is handed a path
+  Jellyfin has already expanded.
+- The predicate is shared with the calling tool, which needs its own copy for the third stage of
+  its fallback. The text was sent there to be adopted verbatim rather than written twice: one
+  side owns it, the other copies. Two independently written rules for one question drift, and
+  the pair exists to detect drift, not to create it.
+
 ## [11.16.0.0] / [12.16.0.0] - 2026-09-02
 
 ### Added

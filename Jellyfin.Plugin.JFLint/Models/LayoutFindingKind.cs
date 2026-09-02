@@ -83,4 +83,31 @@ public static class LayoutFindingKind
     /// </para>
     /// </remarks>
     public const string ImplausibleGroupingKey = nameof(ImplausibleGroupingKey);
+
+    /// <summary>
+    /// An item resolved as a film whose file name carries a season and episode number - one
+    /// episode of a series filed as a movie.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The second kind that covers <c>Movie</c>, and like <see cref="FileNameTitle"/> its rows
+    /// are not broken metadata but a misplacement: a mixed library - one with no
+    /// <c>CollectionType</c> - lets Jellyfin decide per folder whether it holds a film or a
+    /// series, and a season folder is sometimes read as the former. Each episode then becomes
+    /// its own film.
+    /// </para>
+    /// <para>
+    /// <b>Most of its rows are also <see cref="FileNameTitle"/> findings</b> - 16 of 22 on the
+    /// reference library - and that is not double counting to be filtered away. The two answer
+    /// "this title is wrong" against "this type is wrong", and the repairs differ: a rename
+    /// against moving the folder into a series library. The six that are <b>only</b> reported
+    /// here are the argument for the kind existing: their names are hyphen-separated, which the
+    /// dotted-name rule cannot see.
+    /// </para>
+    /// <para>
+    /// See <see cref="EpisodeShapedMovieRule"/> for why the judgement is on the file name and
+    /// not on the folder, which was measured to add false rows only.
+    /// </para>
+    /// </remarks>
+    public const string EpisodeShapedMovie = nameof(EpisodeShapedMovie);
 }
