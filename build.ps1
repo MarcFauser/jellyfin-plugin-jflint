@@ -53,6 +53,14 @@ param(
     # owner='jellyfin' - and URLs are the only thing $RepoOwner should build.
     [string]$Developer = 'Marc Fauser',
 
+    # The catalogue category, and it is NOT free text: Jellyfin's own repository uses exactly
+    # these eight, so anything else is syntactically fine and belongs to no filter - the
+    # plugin then drops out of every category view. Measured against
+    # repo.jellyfin.org/files/plugin/manifest.json, 34 packages. ValidateSet so a typo is
+    # refused before the build rather than silently published.
+    [ValidateSet('Administration', 'General', 'MoviesAndShows', 'Music', 'Anime', 'Books', 'LiveTV', 'Subtitles')]
+    [string]$ManifestCategory = 'General',
+
     # Create the GitHub releases and push manifest.json. Without this the build stays
     # entirely local and nothing becomes visible to anyone.
     [switch]$Publish
@@ -318,6 +326,18 @@ if (Test-Path -LiteralPath $manifestPath)
     # display name is governed by the parameter, so it is written on every run rather than
     # inherited. Found the hard way: fixing $Developer alone changed nothing at all.
     $package.owner = $Developer
+
+    # Same trap, one field over, and the lesson above had only ever been applied to owner:
+    # the literal below sits in the else-branch and is read only when no manifest exists at
+    # all, so a category corrected there would look right and do nothing.
+    #
+    # It is deliberately NOT the value in meta.json. That one travels inside the ZIP, so
+    # changing it changes the artifact and the checksum guard refuses the build - a category
+    # change would then need a new version. The manifest is what Jellyfin actually groups by
+    # (measured by the poster-overlays plugin: GET /Plugins reports no category at all), so
+    # correcting it here takes effect immediately and leaves every published package
+    # byte-identical.
+    $package.category = $ManifestCategory
 }
 else
 {
@@ -328,7 +348,7 @@ else
                       'starting with episodes whose season could not be determined.'
         overview    = 'Library-lint queries the Jellyfin API cannot express.'
         owner       = $Developer
-        category    = 'General'
+        category    = $ManifestCategory
         versions    = @()
     }
 }

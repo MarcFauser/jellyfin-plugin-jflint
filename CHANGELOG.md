@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+### Fixed
+- `build.ps1` inherited the manifest's `category` instead of writing it. The package header
+  comes from the existing `manifest.json`, so the literal in the else-branch is read only when
+  no manifest exists at all - a category corrected there would have looked right and done
+  nothing. **The file already carried that lesson for `owner`** ("Found the hard way: fixing
+  `$Developer` alone changed nothing at all") and it had been applied to that one field only.
+  Now written on every run, from a `-ManifestCategory` parameter.
+- The parameter is a `ValidateSet` of the eight values Jellyfin's own repository uses, so a
+  typo is refused before the build rather than published: an invented category is
+  syntactically valid, belongs to no filter, and drops the plugin out of every category view.
+- Deliberately **not** tied to the `category` in `meta.json`: that one travels inside the ZIP,
+  so changing it changes the artifact and the checksum guard refuses the build. The manifest
+  is what Jellyfin groups by - `GET /Plugins` reports no category at all - so correcting it
+  there takes effect at once and leaves every published package byte-identical.
+- Proved rather than assumed: `-ManifestCategory 'Metadata'` is refused; a normal run leaves
+  `manifest.json` byte-identical; `-ManifestCategory 'MoviesAndShows'` really reaches the file,
+  which is the run that would have done nothing before. Reported by the poster-overlays
+  plugin, which shares this script's ancestry and measured the meta.json half of it.
 - `build.ps1` wrote the `meta.json` / `manifest.json` timestamp with a bare `:` in the format
   string, which is not a colon but the placeholder for the **current culture's** time
   separator. Measured on this machine, one instant in three cultures: `de-DE` gives
