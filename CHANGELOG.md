@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- `build.ps1 -Publish` now pushes the source commit **before** creating the releases, so the
+  tags land on the commit that built the artifacts. `gh release create` makes the tag on the
+  **remote**, at whatever the default branch points at there; it never sees the local HEAD. The
+  guard at the top of the script refuses uncommitted source and says nothing about *unpushed*
+  source, so every tag so far named the **previous** release. Measured: 21 of 23 tags in this
+  repository point at a tree whose `.csproj` carries the version before theirs.
+- **The first reading of that was wrong and is worth recording**: a search for `git tag` found
+  nothing and the conclusion was "the script does not tag, so somebody does it by hand". Wrong
+  term, and the empty result was taken as a finding. It was settled by watching a live publish
+  instead - `v11.17.0.0` landing on the 11.16.0.0 release commit while local HEAD was elsewhere.
+- Proven rather than argued: `v11.18.0.0` was published with this push done by hand and nothing
+  else changed, and it is the first correctly placed tag in the line - `v11.1.0.0` does not
+  count, it was right only for lack of a predecessor. The guard was then forced to fire in both
+  directions in a throwaway repository: an unreachable remote aborts before anything is
+  published, an already-pushed commit passes silently.
+- The push goes **before** the releases and not after, because a tag cannot be moved afterwards
+  without a force push - which is the expensive half this avoids. It is also safe in the order
+  this script cares about: what must never exist is a manifest naming a release that does not,
+  and a source commit advertises nothing at all.
+- The **existing** 21 misplaced tags are deliberately left alone. Measured: the download URLs
+  carry the tag *name* and no commit, all published artifacts still resolve, and nothing
+  automated reads a tag's position - so rewriting them would force-push history on a public
+  repository to correct a claim nobody queries.
 - `build.ps1` inherited the manifest's `category` instead of writing it. The package header
   comes from the existing `manifest.json`, so the literal in the else-branch is read only when
   no manifest exists at all - a category corrected there would have looked right and done

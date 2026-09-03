@@ -550,6 +550,27 @@ if (-not $Publish)
 Write-Host ""
 Write-Host "Publish" -ForegroundColor Cyan
 
+# Push the source BEFORE creating any release, and the reason is a defect this line fixes
+# rather than tidiness. `gh release create` makes the tag on the REMOTE, at whatever the
+# default branch points at there - it never sees the local HEAD. The guard at the top of this
+# script refuses uncommitted source but says nothing about unpushed source, so the source
+# commit was still only local at this moment and every tag landed on the PREVIOUS release
+# commit. Measured 2026-09-03: 21 of 23 tags in this repository name a tree whose csproj
+# carries the version before theirs; v11.18.0.0, published with this push done by hand and
+# nothing else changed, is the first one that does not.
+#
+# It goes here rather than after the releases because the tag has to exist correctly the
+# moment it is created - a tag cannot be moved afterwards without a force push, which is the
+# expensive half this avoids. Pushing first is also safe in the order this script cares about:
+# what must never happen is a manifest naming a release that does not exist, and a source
+# commit advertises nothing at all.
+git -C $root -c credential.helper='!gh auth git-credential' push origin HEAD
+if ($LASTEXITCODE -ne 0)
+{
+    throw 'git push of the source commit failed - nothing was published. Fix the push first, or the release tags would point at the previous release.'
+}
+Write-Host "  ok  source pushed, so the release tags land on the commit that built these artifacts"
+
 foreach ($t in $targets)
 {
     $zip = Join-Path $distDir $t.ZipName
