@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.19.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.19.0.0/jellyfin-plugin-jflint_12.19.0.0.zip",
+        "checksum": "c49ccec4c68257bd4d6bf47bb9198b44",
+        "changelog": "Fixes MediaInfoDB on Jellyfin 12: 1118 Dolby Vision files were reported as DOVIInvalid while the server itself answered DOVIWithHDR10 for the same items. Jellyfin 12 added a validation step that also requires the bt2020nc colour space and bt2020 primaries, and this route was not reading those two columns. Proven against both package lines with identical inputs, and harmless on 10.11. The net10.0 build now also compiles against the final 12.0.0 packages instead of a release candidate.",
+        "timestamp": "2026-09-10T16:09:45Z"
+      },
+      {
         "version": "12.18.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.18.0.0/jellyfin-plugin-jflint_12.18.0.0.zip",
@@ -190,6 +198,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.19.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.19.0.0/jellyfin-plugin-jflint_11.19.0.0.zip",
+        "checksum": "29f0a309b25ccb39155e24d366aa455c",
+        "changelog": "Fixes MediaInfoDB on Jellyfin 12: 1118 Dolby Vision files were reported as DOVIInvalid while the server itself answered DOVIWithHDR10 for the same items. Jellyfin 12 added a validation step that also requires the bt2020nc colour space and bt2020 primaries, and this route was not reading those two columns. Proven against both package lines with identical inputs, and harmless on 10.11. The net10.0 build now also compiles against the final 12.0.0 packages instead of a release candidate.",
+        "timestamp": "2026-09-10T16:09:45Z"
       },
       {
         "version": "11.18.0.0",
