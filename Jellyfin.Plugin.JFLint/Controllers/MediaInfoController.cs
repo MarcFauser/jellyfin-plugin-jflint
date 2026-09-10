@@ -53,10 +53,19 @@ public class MediaInfoController(
     /// <para>
     /// <b>The classification is Jellyfin's, not ours.</b> Dolby Vision profiles 5/7/8/10, the
     /// RPU and base-layer flags, the compatibility id, HDR10+, the <c>dovi</c>/<c>dvh1</c>/
-    /// <c>dvhe</c>/<c>dav1</c> codec tags and the <c>smpte2084</c>/<c>arib-std-b67</c> colour
-    /// transfers are all read by <c>MediaStream.GetVideoColorRange()</c>, which is public. The
+    /// <c>dvhe</c>/<c>dav1</c> codec tags, the <c>smpte2084</c>/<c>arib-std-b67</c> colour
+    /// transfers and - since Jellyfin 12 - the <c>bt2020nc</c> colour space and <c>bt2020</c>
+    /// primaries are all read by <c>MediaStream.GetVideoColorRange()</c>, which is public. The
     /// columns are filled into a <see cref="MediaStream"/> and that method is called; nothing
     /// here reimplements the rule, so it cannot drift from the server's own answer.
+    /// </para>
+    /// <para>
+    /// <b>"Cannot drift" holds only for the rule, not for its inputs</b>, and that distinction
+    /// cost 1118 rows. Calling the server's own method guarantees the same verdict for the same
+    /// stream; it guarantees nothing about whether every field that verdict consults has been
+    /// filled. Jellyfin 12 began consulting two more, this route kept filling the old eight,
+    /// and the result was a confident wrong answer that no cross-check here could catch -
+    /// because the only cross-check for this route is the server, and nobody was asking it.
     /// </para>
     /// <para>
     /// <b>This route has no twin, and that is deliberate.</b> Every other query here exists
@@ -117,7 +126,17 @@ public class MediaInfoController(
                         stream.BlPresentFlag,
                         stream.DvBlSignalCompatibilityId,
                         stream.Hdr10PlusPresentFlag,
-                        stream.ColorTransfer
+                        stream.ColorTransfer,
+
+                        // Jellyfin 12 added a validation step to GetVideoColorRange: once a
+                        // Dolby Vision profile has been derived it must also see bt2020nc and
+                        // bt2020 here, or the result is downgraded to DOVIInvalid. Leaving them
+                        // unset cost 1118 misclassified rows on the reference library, against
+                        // a server that answered DOVIWithHDR10 for the same items. Measured on
+                        // 10.11.11 as well, where they change nothing - so this is not a v12
+                        // branch, it is two columns that should always have been read.
+                        stream.ColorSpace,
+                        stream.ColorPrimaries
                     })
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -139,7 +158,9 @@ public class MediaInfoController(
                         BlPresentFlag = row.BlPresentFlag,
                         DvBlSignalCompatibilityId = row.DvBlSignalCompatibilityId,
                         Hdr10PlusPresentFlag = row.Hdr10PlusPresentFlag,
-                        ColorTransfer = row.ColorTransfer
+                        ColorTransfer = row.ColorTransfer,
+                        ColorSpace = row.ColorSpace,
+                        ColorPrimaries = row.ColorPrimaries
                     };
 
                     var (videoRange, videoRangeType) = stream.GetVideoColorRange();

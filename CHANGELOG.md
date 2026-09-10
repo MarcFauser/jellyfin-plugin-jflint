@@ -102,6 +102,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.19.0.0] / [12.19.0.0] - 2026-09-10
+
+### Fixed
+- `MediaInfoDB` reported **1118 Dolby Vision files as `DOVIInvalid`** on a Jellyfin 12 server
+  while the server itself answered `DOVIWithHDR10` / `DOVIWithHDR10Plus` for the same items.
+  The route now also reads `ColorSpace` and `ColorPrimaries` and fills them into the
+  `MediaStream` before asking Jellyfin to classify it.
+- **Jellyfin 12 added a validation step to `GetVideoColorRange()`**: once a Dolby Vision profile
+  is derived, the result is downgraded to `DOVIInvalid` unless the stream also carries
+  `bt2020nc` and `bt2020`. This route filled the eight fields the 10.11 implementation read and
+  no more, so on v12 every DV file failed that new test.
+- Proven rather than deduced, offline against both package lines with identical inputs:
+  `10.11.11` answers `DOVIWithHDR10` with and without the two fields; `12.0.0` answers
+  `DOVIInvalid` without them and `DOVIWithHDR10` with them. **Not a v12 branch in the code** -
+  two columns that should always have been read, harmless on the older line.
+- Confirmed the data supports it before shipping: eight sampled misclassified rows all carry
+  `bt2020nc` / `bt2020` in the database, and a control SDR row carries neither.
+
+### Changed
+- The `net10.0` build now compiles against the **final `12.0.0`** packages instead of
+  `12.0.0-rc3`, with rc5, rc6 and rc7 in between. Both targets build clean with
+  `TreatWarningsAsErrors`, and the `MediaStream` / `MediaStreamInfo` property sets are identical
+  between rc3 and final - what changed was the derivation logic, not the schema.
+
+### Verified
+- **First execution of the v12 line, ever.** Eighteen artifacts had been published and none had
+  run. Plugin `Active`, 23 routes registered, every route pair returning the same set, and the
+  virtual-path work carried over untouched: 102,608 rows under `%MetadataPath%` expanded
+  identically on both halves, ancestor check over 102,824 rows agreeing.
+- **A route with no twin has the server as its twin, and it must actually be asked.** This
+  defect was invisible to every check the suite runs on it - shape, uniqueness, "the derivation
+  ran", all green on 1118 wrong rows. Calling the server's own method guarantees the same
+  verdict for the same stream; it guarantees nothing about the inputs being complete. The
+  remarks now say so where the "cannot drift" claim is made.
+- `DuplicateEpisode`'s two halves disagreed on 29 ids, and it is **not a defect in either**:
+  Jellyfin has merged those files as alternate versions, so the database half sees two rows and
+  the library half sees one item with two sources. 16 of the 29 carry a `PrimaryVersionId`, the
+  other 13 are their primaries with `MediaSources` 2 or 3. On 10.11 no row carried a link at
+  all. Left as it is - the two halves answer different questions here, and which is wanted is a
+  design decision rather than a bug.
+
 ## [11.18.0.0] / [12.18.0.0] - 2026-09-03
 
 ### Changed
