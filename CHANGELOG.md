@@ -102,6 +102,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.21.0.0] / [12.21.0.0] - 2026-09-14
+
+### Added
+- `POST /JFLint/SetProviderId` - sets one provider id on named rows, or removes it when no
+  value is given. **This is the only way these values can be changed at all**, which is what
+  makes it worth a route rather than a convenience: `BaseNfoParser` builds its set of readable
+  elements from `ProviderManager.GetExternalIdInfos` plus four hardcoded TMDb/IMDb keys and
+  calls `reader.Skip()` for anything else. Measured on the reference server - a Series reports
+  seven external ids and **no anime provider**, because those plugins are uninstalled, so an
+  `<anilistid>` element is skipped on every read however often the file is rescanned.
+- **Setting beats removing, and that is measured too.** A non-numeric value such as `none`
+  suppresses a provider's name search exactly as `-1` did - AniDB's series provider gates on
+  `string.IsNullOrEmpty` and never parses the id on that path, read at the source - while a
+  consumer that reads ids numerically drops it instead of sending it. Removing the key also
+  satisfies the consumer but gives up the suppression, and for one series here the name search
+  lands on an unrelated 1988 short.
+- A blank value means remove, and it has to: Jellyfin will not store an empty id
+  (`TrySetProviderId` returns false, `SetProviderId` throws, `IsValidProviderId` rejects it), so
+  the removal goes through `ProviderIds.Remove`. A `none` survives a later merge because
+  `IsValidProviderId` passes any non-blank value for a provider with no registered validator -
+  only Imdb, Tmdb, TmdbCollection, AudioDb and MusicBrainz have one.
+
+### Changed
+- **The finding routes now ask whether a value will harm a consumer, not whether it could
+  identify a title.** The old predicate was per provider and numeric; the new one is
+  provider-independent and asks only whether the value *parses as a number and is not a usable
+  one*. Provider ids are strings, and the harmful class is the one that looks like a number:
+  SkipMe.db parses with `int.TryParse` and **no sign check**, then omits a null field entirely,
+  so `-1` and `0` are sent and refused with 400 while `none` never leaves the process.
+- That removes the need for a list of accepted sentinel words, which would have had to be
+  guessed and would have flagged the next word somebody picked. It also explains why "set it
+  to 0" looks like a fix and is not one.
+- `GroupingKeyRule` keeps the **identity** question unchanged - all thirteen of its vectors
+  still hold, verified against the built assembly. The two questions genuinely differ and now
+  say so: `Tvdb=abc` identifies nothing but harms nobody, `TvRage=0` does both.
+
+### Verified
+- Both predicates measured against the live library over all 34,606 movie, series and episode
+  rows: **1493 values** either way. The breakdown is the finding - `TvRage=0` on 1297 rows
+  (1281 of them episodes), the anime sentinels at 194, `Tvdb` twice. The 192 reported earlier
+  were series alone.
+- Fourteen vectors for the new predicate and thirteen for the old, both directions, including
+  the four strings that must pass (`none`, `skip`, `-`, a Tvdb slug) and the two that must not.
+
 ## [11.20.0.0] / [12.20.0.0] - 2026-09-14
 
 ### Added

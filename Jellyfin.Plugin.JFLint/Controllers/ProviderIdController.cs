@@ -92,7 +92,7 @@ public class ProviderIdController(
 
             foreach (var pair in item.ProviderIds)
             {
-                var reason = ProviderIdRule.ImplausibleReason(pair.Key, pair.Value);
+                var reason = ProviderIdRule.NonPositiveNumberReason(pair.Key, pair.Value);
                 if (reason is null)
                 {
                     continue;
@@ -159,7 +159,7 @@ public class ProviderIdController(
             {
                 foreach (var provider in row.Providers)
                 {
-                    var reason = ProviderIdRule.ImplausibleReason(provider.ProviderId, provider.ProviderValue);
+                    var reason = ProviderIdRule.NonPositiveNumberReason(provider.ProviderId, provider.ProviderValue);
                     if (reason is null)
                     {
                         continue;
@@ -278,6 +278,132 @@ public class ProviderIdController(
         }
 
         return Ok(removed);
+    }
+
+    /// <summary>
+    /// Sets one provider id on named rows, or removes it when no value is given.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is the only way these values can be changed at all</b>, which is why it exists
+    /// beside the NFO. <c>BaseNfoParser</c> builds its set of readable elements from
+    /// <c>ProviderManager.GetExternalIdInfos</c> plus four hardcoded TMDb/IMDb keys, and calls
+    /// <c>reader.Skip()</c> for anything else. Measured on the reference server: a Series
+    /// reports seven external ids - Custom, Imdb, Tmdb, TvdbCollection, Tvdb, TvdbSlug, Zap2It -
+    /// and no anime provider, because those plugins are uninstalled. An <c>&lt;anilistid&gt;</c>
+    /// element in a tvshow.nfo is therefore skipped on every read, so editing the file changes
+    /// nothing in the database however often it is rescanned.
+    /// </para>
+    /// <para>
+    /// <b>Why setting beats removing.</b> A non-numeric value such as <c>none</c> suppresses a
+    /// provider's name search exactly as a <c>-1</c> did - both AniDB's and AniList's series
+    /// providers gate on <c>string.IsNullOrEmpty</c> and never parse the id on that path - while
+    /// a consumer that reads ids numerically drops it instead of sending it. Removing the key
+    /// satisfies the consumer too, but gives up the suppression, and for one series here the
+    /// name search lands on an unrelated 1988 short. Setting keeps both.
+    /// </para>
+    /// <para>
+    /// Blank means remove, and it has to: Jellyfin will not store an empty id. The removal goes
+    /// through <c>ProviderIds.Remove</c> rather than a setter for the same reason.
+    /// </para>
+    /// <para>
+    /// Like every write here, the caller supplies the ids. The route has no filter of its own,
+    /// cannot touch a file and cannot write any field but this one.
+    /// </para>
+    /// </remarks>
+    /// <param name="request">Which rows, which provider, which value.</param>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <response code="200">What changed, with the value that was there before.</response>
+    /// <response code="400">The request names no items or no provider.</response>
+    /// <returns>One row per item actually changed.</returns>
+    [HttpPost("SetProviderId")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IReadOnlyList<RemovedProviderIdDto>>> SetProviderIdAsync(
+        [FromBody] SetProviderIdRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.ItemIds is null || request.ItemIds.Count == 0)
+        {
+            return BadRequest("ItemIds must name at least one item.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Provider))
+        {
+            return BadRequest("Provider must be given.");
+        }
+
+        if (request.Provider.Contains('=', StringComparison.Ordinal))
+        {
+            // Jellyfin's own setter refuses this, and for a reason that bites later rather
+            // than now: a key containing '=' cannot be deserialised back out of the database.
+            return BadRequest("Provider must not contain '='.");
+        }
+
+        var remove = string.IsNullOrWhiteSpace(request.Value);
+        var changed = new List<RemovedProviderIdDto>();
+
+        foreach (var itemId in request.ItemIds)
+        {
+            if (itemId.Equals(Guid.Empty))
+            {
+                continue;
+            }
+
+            var item = libraryManager.GetItemById(itemId);
+            if (item?.ProviderIds is null)
+            {
+                continue;
+            }
+
+            // The stored spelling, which may differ from the one asked for - AniDb and AniDB
+            // both occur here. Matching case-insensitively and reporting what was found keeps
+            // a caller from having to guess, and stops a "set" from quietly adding a second
+            // key that differs only in case.
+            var existingKey = item.ProviderIds.Keys
+                .FirstOrDefault(k => string.Equals(k, request.Provider, StringComparison.OrdinalIgnoreCase));
+            var previous = existingKey is null ? null : item.ProviderIds[existingKey];
+
+            if (remove)
+            {
+                if (existingKey is null)
+                {
+                    continue;
+                }
+
+                item.ProviderIds.Remove(existingKey);
+            }
+            else
+            {
+                if (string.Equals(previous, request.Value, StringComparison.Ordinal))
+                {
+                    // Already what was asked for. Writing it again would cost a repository
+                    // round trip and report a change that did not happen.
+                    continue;
+                }
+
+                if (existingKey is not null)
+                {
+                    item.ProviderIds.Remove(existingKey);
+                }
+
+                item.ProviderIds[request.Provider] = request.Value!;
+            }
+
+            changed.Add(new RemovedProviderIdDto
+            {
+                ItemId = item.Id,
+                Provider = existingKey ?? request.Provider,
+                Value = previous ?? string.Empty,
+                Name = item.Name
+            });
+
+            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken).ConfigureAwait(false);
+        }
+
+        return Ok(changed);
     }
 
     /// <summary>

@@ -47,6 +47,58 @@ internal static class ProviderIdRule
     };
 
     /// <summary>
+    /// Says why a value will hurt a consumer that reads it as a number, or null when it will not.
+    /// </summary>
+    /// <param name="provider">The provider name, for the message only.</param>
+    /// <param name="value">The id value.</param>
+    /// <returns>The reason, or null.</returns>
+    /// <remarks>
+    /// <para>
+    /// <b>This is a different question from <see cref="ImplausibleReason"/>, and the difference
+    /// was paid for.</b> That one asks whether an id could identify a title, which is what
+    /// matters when two series merge onto it. This one asks whether a value will <i>break
+    /// something downstream</i>, and the answer is not the same: <c>abc</c> identifies nothing
+    /// and harms nobody, while <c>-1</c> does both.
+    /// </para>
+    /// <para>
+    /// <b>Provider ids are strings and the rule treats them as such.</b> The harmful class is
+    /// not "not a number" but "parses as a number and is not a usable one" - measured against
+    /// the consumer that prompted this: SkipMe.db reads an id with
+    /// <c>int.TryParse(..., NumberStyles.Integer, ...)</c> and <b>no sign check</b>, then omits
+    /// a null field entirely (<c>JsonIgnoreCondition.WhenWritingNull</c>). So <c>-1</c> and
+    /// <c>0</c> are sent and refused with 400, while <c>none</c> fails the parse, becomes null,
+    /// and is never sent. The same shape holds for any consumer that parses before sending.
+    /// </para>
+    /// <para>
+    /// That is why no list of accepted sentinel words exists here, and deliberately so. A list
+    /// would have to be guessed and would flag the next word somebody chooses; the parse does
+    /// not care whether the value is <c>none</c>, <c>skip</c> or <c>-</c>. It is also why
+    /// "set it to 0" looks like a fix and is not one.
+    /// </para>
+    /// <para>
+    /// Provider-independent on purpose. The harm comes from the value, not from which key it
+    /// sits under - a consumer reading an unknown provider numerically breaks just the same.
+    /// </para>
+    /// </remarks>
+    public static string? NonPositiveNumberReason(string? provider, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (!long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) || number > 0)
+        {
+            // Either not a number at all - which is the safe state, because a consumer that
+            // parses will drop it - or a usable positive id.
+            return null;
+        }
+
+        var name = string.IsNullOrWhiteSpace(provider) ? "provider" : provider;
+        return $"{name} id '{value}' reads as the number {number.ToString(CultureInfo.InvariantCulture)}, which no provider issues - a consumer that parses it sends it and is refused";
+    }
+
+    /// <summary>
     /// Says why an id could not identify anything, or null when it could or cannot be judged.
     /// </summary>
     /// <param name="provider">The provider name, as it appears in <c>ProviderIds</c>.</param>
