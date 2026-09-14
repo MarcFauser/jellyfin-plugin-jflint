@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.23.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.23.0.0/jellyfin-plugin-jflint_12.23.0.0.zip",
+        "checksum": "93ca3103fcce1d502ace9ec708f22747",
+        "changelog": "Corrects the previous entry: an NFO can carry these keys after all. BaseNfoParser skips an unknown element name such as anidbid, but its uniqueid branch looks up the type attribute and stores it verbatim when no provider is registered - no validation at all. That is how 9,575 TvRage ids reached a server on which the provider has never been installed, one of them reading 1065779330. The route remarks now warn that a value set here is a database edit and a later rescan will restore the old one from the file, so repairing the NFO is the durable fix.",
+        "timestamp": "2026-09-14T16:10:30Z"
+      },
+      {
         "version": "12.22.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.22.0.0/jellyfin-plugin-jflint_12.22.0.0.zip",
@@ -222,6 +230,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.23.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.23.0.0/jellyfin-plugin-jflint_11.23.0.0.zip",
+        "checksum": "13673ae63f468a1989f1fcfa1d20b332",
+        "changelog": "Corrects the previous entry: an NFO can carry these keys after all. BaseNfoParser skips an unknown element name such as anidbid, but its uniqueid branch looks up the type attribute and stores it verbatim when no provider is registered - no validation at all. That is how 9,575 TvRage ids reached a server on which the provider has never been installed, one of them reading 1065779330. The route remarks now warn that a value set here is a database edit and a later rescan will restore the old one from the file, so repairing the NFO is the durable fix.",
+        "timestamp": "2026-09-14T16:10:30Z"
       },
       {
         "version": "11.22.0.0",
