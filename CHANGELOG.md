@@ -106,12 +106,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - `POST /JFLint/SetProviderId` - sets one provider id on named rows, or removes it when no
-  value is given. **This is the only way these values can be changed at all**, which is what
-  makes it worth a route rather than a convenience: `BaseNfoParser` builds its set of readable
-  elements from `ProviderManager.GetExternalIdInfos` plus four hardcoded TMDb/IMDb keys and
-  calls `reader.Skip()` for anything else. Measured on the reference server - a Series reports
-  seven external ids and **no anime provider**, because those plugins are uninstalled, so an
-  `<anilistid>` element is skipped on every read however often the file is rescanned.
+  value is given.
+- **CORRECTION, same day: this entry first said "the only way these values can be changed at
+  all", and that is wrong.** Jellyfin's own `POST /Items/{itemId}` (`UpdateItem`) replaces the
+  whole provider dictionary - `item.SetProviderIds(request.ProviderIds)`, which rebuilds it from
+  the body - so a key left out of the body is gone. Measured against this server's OpenAPI:
+  the route is there and `BaseItemDto.ProviderIds` is a string map. The claim is left standing
+  and corrected rather than rewritten, because the reasoning that replaced it is the point.
+- **What is true is narrower and is the actual argument.** `UpdateItem` writes **25 fields
+  straight from the body with no null guard** - `item.Name`, `item.Overview`, `item.Genres`,
+  `item.LockedFields`, `item.IsLocked = request.LockData ?? false`, `RunTimeTicks`,
+  `Video3DFormat` and eighteen more, counted in `ItemUpdateController.cs`. Only `ProviderIds`
+  itself is guarded. A partial body therefore blanks the rest, and a correct round trip would
+  have to read a full DTO, change one entry and write it all back - having first proved that
+  `GET /Items/{id}` returns every one of those 25 faithfully. **A route that can only touch
+  provider ids needs no such proof**, which is the same argument `DeleteItemKeepFile` rests on:
+  not "the host cannot do it", but "the host's way takes more with it than I want to touch".
+- The NFO is a dead end for these keys, and that part holds: `BaseNfoParser` builds its set of
+  readable elements from `ProviderManager.GetExternalIdInfos` plus four hardcoded TMDb/IMDb keys
+  and calls `reader.Skip()` for anything else. Measured on the reference server - a Series
+  reports seven external ids and **no anime provider**, because those plugins are uninstalled,
+  so an `<anilistid>` element is skipped on every read however often the file is rescanned.
 - **Setting beats removing, and that is measured too.** A non-numeric value such as `none`
   suppresses a provider's name search exactly as `-1` did - AniDB's series provider gates on
   `string.IsNullOrEmpty` and never parses the id on that path, read at the source - while a

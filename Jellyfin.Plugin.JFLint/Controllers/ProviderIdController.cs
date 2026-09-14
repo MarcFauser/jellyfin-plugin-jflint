@@ -285,8 +285,21 @@ public class ProviderIdController(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>This is the only way these values can be changed at all</b>, which is why it exists
-    /// beside the NFO. <c>BaseNfoParser</c> builds its set of readable elements from
+    /// <b>The server can do this too, and the reason to have it anyway is what the server's own
+    /// route takes with it.</b> <c>POST /Items/{itemId}</c> replaces the whole dictionary -
+    /// <c>item.SetProviderIds(request.ProviderIds)</c> rebuilds it from the body, so a key left
+    /// out is gone. It also writes <b>25 further fields straight from that body with no null
+    /// guard</b>: <c>Name</c>, <c>Overview</c>, <c>Genres</c>, <c>LockedFields</c>,
+    /// <c>IsLocked</c>, <c>RunTimeTicks</c>, <c>Video3DFormat</c> and eighteen more. A partial
+    /// body blanks them, so a correct call means reading a full DTO, changing one entry and
+    /// writing it all back - which is only safe if <c>GET /Items/{id}</c> is first proved to
+    /// return every one of those faithfully. This route needs no such proof because it cannot
+    /// write anything else. Same argument as <c>DeleteItemKeepFile</c>: not "the host cannot do
+    /// it", but "the host's way takes more with it than I want to touch".
+    /// </para>
+    /// <para>
+    /// <b>The NFO, on the other hand, really is a dead end for these keys.</b>
+    /// <c>BaseNfoParser</c> builds its set of readable elements from
     /// <c>ProviderManager.GetExternalIdInfos</c> plus four hardcoded TMDb/IMDb keys, and calls
     /// <c>reader.Skip()</c> for anything else. Measured on the reference server: a Series
     /// reports seven external ids - Custom, Imdb, Tmdb, TvdbCollection, Tvdb, TvdbSlug, Zap2It -
