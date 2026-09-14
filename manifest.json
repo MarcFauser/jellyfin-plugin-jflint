@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.22.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.22.0.0/jellyfin-plugin-jflint_12.22.0.0.zip",
+        "checksum": "567477748a56b3e1c548227f6fc20fcb",
+        "changelog": "Corrects a claim that shipped in the previous catalogue entry. SetProviderId is not the only way to change a provider id: Jellyfin POST /Items/{itemId} rebuilds the whole dictionary from its body, so a key left out is gone. The real argument for a separate route is narrower - that same UpdateItem writes 25 further fields straight from the body with no null guard, including Name, Overview, Genres and LockedFields, so a partial body blanks them. A route that can touch nothing but provider ids needs no proof that a full round trip is lossless.",
+        "timestamp": "2026-09-14T14:20:01Z"
+      },
+      {
         "version": "12.21.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.21.0.0/jellyfin-plugin-jflint_12.21.0.0.zip",
@@ -214,6 +222,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.22.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.22.0.0/jellyfin-plugin-jflint_11.22.0.0.zip",
+        "checksum": "cd661304446ad44b86d57cac5bcc681f",
+        "changelog": "Corrects a claim that shipped in the previous catalogue entry. SetProviderId is not the only way to change a provider id: Jellyfin POST /Items/{itemId} rebuilds the whole dictionary from its body, so a key left out is gone. The real argument for a separate route is narrower - that same UpdateItem writes 25 further fields straight from the body with no null guard, including Name, Overview, Genres and LockedFields, so a partial body blanks them. A route that can touch nothing but provider ids needs no proof that a full round trip is lossless.",
+        "timestamp": "2026-09-14T14:20:01Z"
       },
       {
         "version": "11.21.0.0",
