@@ -102,6 +102,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.23.0.0] / [12.23.0.0] - 2026-09-14
+
+### Fixed
+- **The previous release said the NFO is a dead end for these keys. It is not**, and the
+  correction is in the same place the claim was. `BaseNfoParser` has **two** consumers of its
+  element map, and only one of them refuses an unknown provider:
+  - the element-name branch looks up `<anidbid>` and calls `reader.Skip()` - nothing is stored;
+  - the `<uniqueid type="anidb">` branch looks the **type attribute** up in the same map and,
+    finding nothing, **stores it verbatim**. No registration, no validation.
+- **Found by a question rather than by reading**, which is why it was missed twice: the owner
+  said he had never installed TvRage and that the server is only months old, so the 9,575
+  TvRage ids on his episodes could not be historical. They came in through `uniqueid` tags in
+  release NFOs. One of them reads `1065779330`, a number no such database ever issued - the
+  value is whatever the NFO author wrote. `TvRage` and `AniDB` are both stored and both
+  unregistered, and no TvRage plugin has ever existed here, so that branch is the only way in.
+- The route's remarks now carry the consequence for a caller as a **warning**: a value set
+  here is a database edit, the file beside the media still says what it said, and a later
+  rescan will put the old value back through the same `uniqueid` path. Repairing the file is
+  the durable fix; the route is the one that takes effect now.
+
+### Changed
+- This is the second time in one day that a claim of the form "there is no other way" turned
+  out to be false, both taken over from a sibling session without being checked. Recorded as
+  the shape rather than the instance: **a negative claim about a host's capabilities is a
+  measurement, and it ages** - `11.22.0.0` corrected the first half of it and inherited the
+  second.
+
 ## [11.22.0.0] / [12.22.0.0] - 2026-09-14
 
 ### Fixed

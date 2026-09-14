@@ -298,14 +298,38 @@ public class ProviderIdController(
     /// it", but "the host's way takes more with it than I want to touch".
     /// </para>
     /// <para>
-    /// <b>The NFO, on the other hand, really is a dead end for these keys.</b>
-    /// <c>BaseNfoParser</c> builds its set of readable elements from
-    /// <c>ProviderManager.GetExternalIdInfos</c> plus four hardcoded TMDb/IMDb keys, and calls
-    /// <c>reader.Skip()</c> for anything else. Measured on the reference server: a Series
-    /// reports seven external ids - Custom, Imdb, Tmdb, TvdbCollection, Tvdb, TvdbSlug, Zap2It -
-    /// and no anime provider, because those plugins are uninstalled. An <c>&lt;anilistid&gt;</c>
-    /// element in a tvshow.nfo is therefore skipped on every read, so editing the file changes
-    /// nothing in the database however often it is rescanned.
+    /// <b>The NFO reaches these keys after all - but only in one of its two spellings, and the
+    /// difference is not obvious from either.</b> <c>BaseNfoParser</c> builds a map of element
+    /// names from <c>ProviderManager.GetExternalIdInfos</c> (as <c>Key + "Id"</c>) plus four
+    /// hardcoded TMDb/IMDb entries, and there are two consumers of it:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// The element-name branch looks up <c>&lt;anidbid&gt;</c> and, finding nothing, calls
+    /// <c>reader.Skip()</c>. Nothing is stored. On this server a Series reports seven external
+    /// ids - Custom, Imdb, Tmdb, TvdbCollection, Tvdb, TvdbSlug, Zap2It - and no anime provider,
+    /// because those plugins are uninstalled.
+    /// </description></item>
+    /// <item><description>
+    /// The <c>&lt;uniqueid type="anidb"&gt;</c> branch looks the <i>type attribute</i> up in the
+    /// same map and, finding nothing, <b>stores it verbatim anyway</b>. No registration is
+    /// required and no validation happens.
+    /// </description></item>
+    /// </list>
+    /// <para>
+    /// That second path is not theory: this library holds <b>9,575 TvRage ids on episodes</b>
+    /// for a provider that was never installed and has not existed since 2014. They arrived in
+    /// the <c>uniqueid</c> tags of release NFOs, which is also why one of them reads
+    /// <c>1065779330</c> - a number no such database ever issued. <c>TvRage</c> and
+    /// <c>AniDB</c> are both stored and both unregistered, and for TvRage no plugin has ever
+    /// existed here that could have written them, so that branch is the only way in.
+    /// </para>
+    /// <para>
+    /// <b>The consequence for a caller is a warning, not an invitation.</b> A value set through
+    /// this route is a database edit, and the NFO beside the file still says what it said. A
+    /// later rescan that reads the file will put the old value back through the
+    /// <c>uniqueid</c> path. Repairing the file is the durable fix; this route is the one that
+    /// takes effect now.
     /// </para>
     /// <para>
     /// <b>Why setting beats removing.</b> A non-numeric value such as <c>none</c> suppresses a
