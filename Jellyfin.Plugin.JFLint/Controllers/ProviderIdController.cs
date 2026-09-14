@@ -317,12 +317,37 @@ public class ProviderIdController(
     /// </description></item>
     /// </list>
     /// <para>
-    /// That second path is not theory: this library holds <b>9,575 TvRage ids on episodes</b>
-    /// for a provider that was never installed and has not existed since 2014. They arrived in
-    /// the <c>uniqueid</c> tags of release NFOs, which is also why one of them reads
-    /// <c>1065779330</c> - a number no such database ever issued. <c>TvRage</c> and
-    /// <c>AniDB</c> are both stored and both unregistered, and for TvRage no plugin has ever
-    /// existed here that could have written them, so that branch is the only way in.
+    /// That second path is confirmed by experiment rather than by reading:
+    /// <c>&lt;uniqueid type="AniDB"&gt;none&lt;/uniqueid&gt;</c> overwrote a stored <c>-1</c>,
+    /// and <c>&lt;anidbid&gt;none&lt;/anidbid&gt;</c> beside it did nothing.
+    /// </para>
+    /// <para>
+    /// <b>The spelling has to be exact, and getting it wrong is not cosmetic.</b> The
+    /// <c>else</c> branch stores the <c>type</c> attribute verbatim, so
+    /// <c>type="anidb"</c> creates a <b>second</b> entry next to an existing <c>AniDB</c>.
+    /// Jellyfin itself does not care - <c>ProviderIds</c> compares case-insensitively - but the
+    /// payload then carries two keys differing only in case, and a consumer that maps JSON onto
+    /// a case-insensitive structure rejects the <b>whole document</b>. Measured: PowerShell's
+    /// <c>ConvertFrom-Json</c> fails with "contains keys with different casing", so one such
+    /// row takes down every query that returns it, at HTTP 200 and with valid JSON.
+    /// Normalisation only happens for the seventeen names in <c>MetadataProvider</c>, which
+    /// covers <c>TvRage</c> but not <c>AniDb</c>, <c>AniList</c> or <c>AniSearch</c>.
+    /// </para>
+    /// <para>
+    /// <b>An NFO can set and overwrite, but never remove.</b> An empty element is not a
+    /// deletion: <c>&lt;uniqueid type="X"/&gt;</c> exits at the <c>IsEmptyElement</c> guard, and
+    /// <c>&lt;uniqueid type="X"&gt;&lt;/uniqueid&gt;</c> reaches <c>TrySetProviderId</c> with an
+    /// empty value, which returns false. Neither writes and neither clears - the stored value
+    /// stays. There is no <c>Remove</c>, <c>Clear</c> or wholesale <c>SetProviderIds</c> call in
+    /// the parser at all, which is what leaves removal to this route.
+    /// </para>
+    /// <para>
+    /// <b>What this path is NOT responsible for, corrected after it was published as an
+    /// example.</b> The 9,575 <c>TvRage</c> ids on this library's episodes do not come from
+    /// NFOs; Jellyfin's built-in TMDb provider writes them from TMDb's <c>external_ids</c>
+    /// cross-reference (<c>TmdbEpisodeProvider</c> sets Tvdb, Imdb and TvRage and no Tmdb id of
+    /// its own, which is exactly the key set those rows carry). The mechanism above is real,
+    /// but a value's mere implausibility says nothing about which path wrote it.
     /// </para>
     /// <para>
     /// <b>The consequence for a caller is a warning, not an invitation.</b> A value set through

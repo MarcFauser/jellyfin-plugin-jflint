@@ -102,6 +102,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.24.0.0] / [12.24.0.0] - 2026-09-14
+
+### Fixed
+- **The `uniqueid` mechanism from the previous release is right; the evidence given for it was
+  not, and it is removed.** That entry said the library's 9,575 TvRage ids proved NFOs can
+  write an unregistered provider key. They do not come from NFOs. Jellyfin's **built-in** TMDb
+  provider writes them from TMDb's `external_ids` cross-reference: `TmdbEpisodeProvider` sets
+  Tvdb, Imdb and TvRage - and **no Tmdb id of its own** - which is exactly the key set those
+  episodes carry (Tvdb 30,758, Imdb 26,524, TvRage 9,575, Tmdb 0). At series level the same
+  provider does set its own id, and there all 166 TvRage rows carry a Tmdb id and none lacks one.
+- The inference that failed was **"no TvRage plugin was ever installed, so only the NFO path
+  remains"**. Any provider may write any key; a missing plugin of that name proves nothing. The
+  implausible-looking value quoted as support (`1065779330`) proves nothing either - the two
+  NFOs beside those files contain no `uniqueid` element and no `tvrage` at all, and TVRage did
+  issue episode ids in that range.
+- **An NFO can set and overwrite a provider id but never remove one.** An empty element is not a
+  deletion: `<uniqueid type="X"/>` exits at the `IsEmptyElement` guard and
+  `<uniqueid type="X"></uniqueid>` reaches `TrySetProviderId` with an empty value, which returns
+  false. The parser contains no `Remove`, no `Clear` and no wholesale `SetProviderIds` call -
+  which is what leaves removal to this plugin.
+- **The `type` spelling must match exactly, and a wrong one is not cosmetic.** Normalisation
+  only covers the seventeen names in `MetadataProvider` - which includes `TvRage` but not
+  `AniDb`, `AniList` or `AniSearch` - so `type="anidb"` creates a **second** entry beside
+  `AniDB`. Jellyfin does not care, but the payload then carries two keys differing only in case,
+  and PowerShell's `ConvertFrom-Json` rejects the **entire document** with "contains keys with
+  different casing". One such row takes down every query that returns it, at HTTP 200 and with
+  valid JSON. `-AsHashtable` reads it; the row still has to be repaired.
+
+### Changed
+- The tally kept in `11.23.0.0` was too narrow. It recorded that a **negative** claim about a
+  host ages. Its twin is the same error in green: **"this is the only way" is also a statement
+  about every other way**, drawn from the single one that was observed. Three in a day, two
+  negative and one positive, all the same shape. The cheap guard before passing one on: *which
+  second way would have to exist for my sentence to be false, and did I look there?*
+
 ## [11.23.0.0] / [12.23.0.0] - 2026-09-14
 
 ### Fixed
