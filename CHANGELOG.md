@@ -102,6 +102,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.22.0.0] / [12.22.0.0] - 2026-09-14
+
+### Fixed
+- `SetProviderId`'s own remarks claimed it was **the only way** to change a provider id. It is
+  not, and the claim shipped in the previous release's catalogue text, which is why this one
+  exists rather than waiting: `POST /Items/{itemId}` calls `item.SetProviderIds(...)`, which
+  rebuilds the dictionary from the body, so a key left out of it is gone. Verified against this
+  server's OpenAPI - the route is present and `BaseItemDto.ProviderIds` is a string map.
+- **The reasoning that replaces it is narrower and is the real one.** `UpdateItem` writes
+  **25 fields straight from the body with no null guard** - counted in
+  `ItemUpdateController.cs`, and they include `Name`, `Overview`, `Genres`, `LockedFields` and
+  `IsLocked = request.LockData ?? false`; only `ProviderIds` itself is guarded. A partial body
+  blanks the rest, so a correct call means reading a full DTO, changing one entry and writing
+  it all back, having first proved that `GET /Items/{id}` returns all 25 faithfully. A route
+  that can touch nothing else needs no such proof.
+- That is the argument `DeleteItemKeepFile` already rests on, word for word: **not "the host
+  cannot do it", but "the host's way takes more with it than I want to touch"** - and the
+  difference between that and rebuilding something out of ignorance is that the reason can be
+  written down.
+- The false sentence is left standing in the `11.21.0.0` entry with the correction beside it
+  rather than edited away. A quietly fixed claim teaches nobody, and this one was taken over
+  from a sibling session without being checked - which is the part worth remembering.
+
 ## [11.21.0.0] / [12.21.0.0] - 2026-09-14
 
 ### Added
