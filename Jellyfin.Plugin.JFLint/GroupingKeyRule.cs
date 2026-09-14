@@ -68,64 +68,14 @@ internal static class GroupingKeyRule
     /// <param name="provider">The provider name from <see cref="LeadingProvider"/>.</param>
     /// <param name="value">The id value.</param>
     /// <returns>The reason, or null when the id is plausible or cannot be judged.</returns>
+    /// <remarks>
+    /// The formats themselves live in <see cref="ProviderIdRule"/> and are not restated here.
+    /// This rule asks a narrower question - only the id that leads a presentation key can ever
+    /// reach it, which <see cref="LeadingProvider"/> restricts to Custom, Tvdb and Imdb - but
+    /// "what shape is a Tvdb id" has to have exactly one answer in this assembly. Custom needs
+    /// no branch of its own: it is opaque by design and the shared rule is silent about it,
+    /// which is the same verdict for the same reason.
+    /// </remarks>
     public static string? ImplausibleReason(string? provider, string? value)
-    {
-        if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(value))
-        {
-            // No id of the three led the key, so the grouping came from somewhere this rule
-            // knows nothing about. Silence, not a finding - a rule that judges what it cannot
-            // see produces exactly the false alarms it was written to avoid.
-            return null;
-        }
-
-        if (string.Equals(provider, nameof(MetadataProvider.Custom), StringComparison.Ordinal))
-        {
-            // Opaque on purpose. Any value is a legitimate merge key.
-            return null;
-        }
-
-        if (string.Equals(provider, nameof(MetadataProvider.Tvdb), StringComparison.Ordinal))
-        {
-            if (!long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number <= 0)
-            {
-                return $"Tvdb id '{value}' is not a positive integer";
-            }
-
-            return null;
-        }
-
-        if (string.Equals(provider, nameof(MetadataProvider.Imdb), StringComparison.Ordinal))
-        {
-            // tt plus digits. Nothing else is an IMDb title id.
-            if (value.Length < 3
-                || !value.StartsWith("tt", StringComparison.OrdinalIgnoreCase)
-                || !AllDigits(value, 2))
-            {
-                return $"Imdb id '{value}' is not of the form tt<digits>";
-            }
-
-            return null;
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// True when every character from <paramref name="start"/> on is an ASCII digit.
-    /// </summary>
-    /// <param name="value">The value to inspect.</param>
-    /// <param name="start">The index to start at.</param>
-    /// <returns>Whether the tail is all digits.</returns>
-    private static bool AllDigits(string value, int start)
-    {
-        for (var i = start; i < value.Length; i++)
-        {
-            if (!char.IsAsciiDigit(value[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+        => ProviderIdRule.ImplausibleReason(provider, value);
 }

@@ -102,6 +102,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.20.0.0] / [12.20.0.0] - 2026-09-14
+
+### Added
+- `GET /JFLint/InvalidProviderIds` and `…DB` - provider ids that cannot identify anything,
+  one row per **id** rather than per item, for movies, series and episodes.
+- `POST /JFLint/RemoveProviderId` - removes named providers from named rows. **Jellyfin never
+  deletes a provider id on a refresh**: `MetadataService.MergeBaseItemData` walks the source and
+  writes into the target, so an id the source no longer carries is simply left standing.
+  Cleaning an NFO is therefore only half the repair. Setting it empty is not available either -
+  `TrySetProviderId` returns false on a blank value and `SetProviderId` throws - so removing the
+  key is what is left.
+- **The route can do exactly one thing.** It takes ids from the caller, which got them from the
+  query pair and showed them to a user; it cannot touch a file, delete an item, write another
+  field or choose its own targets. Same reasoning as `DeleteItemKeepFile` taking one id instead
+  of a filter: a wrong predicate upstream costs the rows that were on screen, not the library.
+- The response lists **what was removed, with its value**, rather than a count - that is the
+  material to put it back, and it keeps "nothing matched" distinguishable from "all matched".
+
+### Changed
+- The per-provider formats moved into a shared `ProviderIdRule`; `GroupingKeyRule` now delegates
+  to it instead of restating them. Verified that all thirteen existing grouping-key vectors keep
+  their verdicts **and their exact messages** - two rules that look alike are two rules that
+  drift apart, and this one had already been copied once.
+
+### Verified
+- **"Not a positive integer" is the wrong predicate, measured rather than argued.** Asked of
+  every provider on the reference library it reports **678 values across 512 of 527 series** -
+  `TvdbSlug` is text by design (515 of them), `TvdbCollection` names a group, `Custom` is opaque.
+  Asked per provider it reports 192 across 13 series, which is the real fault. The rule is a
+  positive list and stays silent on anything it does not know.
+- **The ids a caller sees are not the ids it must repair.** On v12 the merged view shows 13
+  series where the database holds 85 release-folder rows, and the values sit on the rows.
+  Passing the merged ids would repair 13 of 85 and leave the fault in place, so both query
+  routes report row ids and the sort carries `ItemId` as a real tiebreaker - one merged series
+  produces many rows with the same name and provider.
+- Counts reconciled against the sibling tool rather than accepted: 13 series and 85 folders
+  agree exactly, and its total of 277 is **192** here. `AniList` (81) and `AniSearch` (26) match
+  to the row; `AniDb` is 85 here against 170 there, exactly double, which is what matching both
+  `AniDb` and `AniDB` against a case-insensitive dictionary produces.
+
 ## [11.19.0.0] / [12.19.0.0] - 2026-09-10
 
 ### Fixed
