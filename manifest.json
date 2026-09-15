@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.25.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.25.0.0/jellyfin-plugin-jflint_12.25.0.0.zip",
+        "checksum": "a83fdc29cb8caab30ba40fbdca87b61f",
+        "changelog": "Adds the ImageInfo / ImageInfoDB route pair: findings about the rows that describe an item's images - an image described by more than one row, an image whose stored width or height is zero, and an image with no blurhash. Duplicate rows make every library scan stat the same file again and again, and the stock API cannot show them in bulk: BaseItemDto.ImageTags is keyed by image type and holds one entry per type, so a row that exists thousands of times looks like one that exists once. Per item the server can answer, but only one item per call. One finding per image rather than per row, each carrying how many rows it covers. Both halves report the expanded path, because an image path is stored with Jellyfin's %MetadataPath% placeholder and most artwork lives there. The blurhash test asks for length rather than comparing the column against an empty string, which cannot match a blob in SQLite at all.",
+        "timestamp": "2026-09-15T15:07:20Z"
+      },
+      {
         "version": "12.24.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.24.0.0/jellyfin-plugin-jflint_12.24.0.0.zip",
@@ -238,6 +246,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.25.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.25.0.0/jellyfin-plugin-jflint_11.25.0.0.zip",
+        "checksum": "f325ced44ae36c046e7721cb84f5294c",
+        "changelog": "Adds the ImageInfo / ImageInfoDB route pair: findings about the rows that describe an item's images - an image described by more than one row, an image whose stored width or height is zero, and an image with no blurhash. Duplicate rows make every library scan stat the same file again and again, and the stock API cannot show them in bulk: BaseItemDto.ImageTags is keyed by image type and holds one entry per type, so a row that exists thousands of times looks like one that exists once. Per item the server can answer, but only one item per call. One finding per image rather than per row, each carrying how many rows it covers. Both halves report the expanded path, because an image path is stored with Jellyfin's %MetadataPath% placeholder and most artwork lives there. The blurhash test asks for length rather than comparing the column against an empty string, which cannot match a blob in SQLite at all.",
+        "timestamp": "2026-09-15T15:07:20Z"
       },
       {
         "version": "11.24.0.0",
