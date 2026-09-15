@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **A claim written into `ImageInfo`'s own remarks, corrected before release rather than after.**
+  The first draft said the image row count is something HTTP cannot answer at all. It is not:
+  `BaseItemDto.ImageTags` is a `Dictionary<ImageType, string>` and does hide duplicates, but
+  `GET /Items/{id}/Images` walks `item.ImageInfos` and emits one entry per entry in both of its
+  passes, so duplicates are visible there. The real argument is the one `MediaInfoDB` already
+  rests on - the server can only be asked one item at a time, and that is 164,000 calls on the
+  reference library - and the remarks now say that instead. A negative claim about every route,
+  drawn from the one route that was actually looked at, is the shape recorded twice on
+  2026-09-14; this is the third, and the only one caught before it shipped.
 - `build.ps1 -Publish` now pushes the source commit **before** creating the releases, so the
   tags land on the commit that built the artifacts. `gh release create` makes the tag on the
   **remote**, at whatever the default branch points at there; it never sees the local HEAD. The
@@ -87,6 +96,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `-Changelog` still overwrites, which was checked rather than assumed.
 
 ### Added
+- `GET /JFLint/ImageInfo` and `…DB` - findings about the rows in `BaseItemImageInfos`: an image
+  described by more than one row, an image whose stored width or height is zero, and an image
+  with no blurhash. One finding per **image** and check rather than per row, each carrying how
+  many rows it covers.
+- **Requested as a database-only route in the shape of `MediaInfoDB`, and shipped as a pair
+  instead, because the reason `MediaInfoDB` has no twin does not transfer.** That one is alone
+  because `MediaStreamQuery.ItemId` is a non-nullable `Guid`, so streams can only be fetched an
+  item at a time. Images have no such limit, and nothing on the read path folds duplicate rows:
+  `InternalItemsQuery` defaults `DtoOptions.EnableImages` to true, `PrepareItemQuery` adds
+  `Include(e => e.Images)`, and the mapper assigns `entity.Images.Select(...).ToArray()` - a
+  plain projection with no `Distinct` and no dictionary, on both lines (10.11
+  `BaseItemRepository.cs:971-973`, v12 `BaseItemMapper.cs:204-210`). Every row also carries its
+  own `Guid.NewGuid()` primary key, so identity resolution cannot collapse them either.
+- **And the pair is worth more here than transport, which is the usual objection to one.** The
+  database half reads the raw `Path` column and the object-model half reads the materialised
+  property, and those are different strings: an image path is written through `GetPathToSave`
+  and read back through `appHost.ExpandVirtualPath`. For media that substitution is a corner
+  case; for images it is the common case, because downloaded artwork lives under the metadata
+  directory. That is where this plugin's one released path defect lived.
+- Both halves name every kind from `IItemTypeLookup.BaseItemKindNames`, as `ItemsByPath` does.
+  Not a narrowing but a requirement: an unrestricted `GetItemList` dies on the first row whose
+  `Type` no longer resolves to a class, and a database half without the same list would report
+  rows its twin can never return.
 - `build.ps1 -Publish`: creates one GitHub release per artifact and pushes the updated
   `manifest.json`, in that order. A manifest entry whose release does not exist yet is a
   failed download in the dashboard, so the releases go first, each uploaded ZIP is fetched
@@ -101,6 +133,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   dark dashboard without a background box. Deliberately no new plugin version: the logo
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
+
+### Verified
+- **`Blurhash` is a `byte[]`, not text, and that silently breaks the obvious health query.**
+  Read out of the shipped assemblies rather than the source - `Jellyfin.Database.Implementations`
+  10.11.11/net9.0 and 12.0.0/net10.0, whose `BaseItemImageInfo` is identical on both: `Blurhash`
+  `Byte[]?`, `Path` `String`, `Width`/`Height` non-nullable `Int32`, `ImageType`
+  `ImageInfoImageType`. `BaseItemRepository` writes `Encoding.UTF8.GetBytes(BlurHash)`, so an
+  empty blurhash is stored as a **zero-length blob** and not as null. In SQLite a blob never
+  compares equal to a text value, so `WHERE Blurhash = ''` cannot match even that. Measured in
+  memory on sqlite 3.46.1 over three rows: `= ''` returns **0**, `= x''` returns 1,
+  `length(Blurhash) = 0` returns 1 - with the control that the same `= ''` against a **text**
+  column returns 1, so it is the storage class and not the operator. Both halves therefore ask
+  for length, and the object-model half uses `IsNullOrEmpty` because the mapper decodes a
+  zero-length blob to `""`.
+- **Every query shape was checked for translation on both EF Core lines before it was written,
+  with a negative control.** This project has a scar exactly here: `Contains('.')` once compiled
+  clean, translated on EF Core 10 and threw at query time on the whole EF Core 9 line Jellyfin
+  10.11 ships. The grouped count, the join onto the grouped result, the filter applied *after*
+  that join on a projected property, the `Where` before the `GroupBy` and the blurhash length
+  test were each generated **and executed** against SQLite on EF Core 9.0.11 and 10.0.11. All
+  produce identical SQL on both. `Contains(char)` ran in the same probe and failed on 9 while
+  succeeding on 10, so the green results are not a blind instrument.
+- **The read-side half of jellyfin/jellyfin#17192's analysis does not reproduce, and saying so
+  matters because it would otherwise read as a reason to distrust the object-model half.** That
+  write-up names three factors and the first is "duplicate materialization on read" -
+  `AsNoTracking()` plus `AsSingleQuery()` plus several collection `Include`s allegedly yielding
+  `|Images| x |other collections|` copies. Measured on a seeded model with all four collections
+  Jellyfin includes: the join really does return **24 rows for 2 images** (checked with raw SQL,
+  so the control fires) and EF still materialises exactly **2**, on EF Core 9.0.0, 9.0.11 and
+  10.0.11 alike. The write-up is flagged as AI-generated by its own author, who says it was
+  never run. Its other two factors - delete-then-insert without deduplication, and a random
+  surrogate key that lets duplicate inserts through - are untouched and explain why duplicates
+  **persist**; where they come from is unsettled, and this route does not need to know.
+- The issue's figures were read in the issue rather than taken second hand: *"I have one movie
+  with 262,144 image rows in my DB with 4 real images"* and *"If I clean them up manually the
+  library scan becomes fast again"*, both `Gr3q`, 2026-07-05. The same reporter adds a day later
+  that after cleaning he **could not reproduce** the growth on 12-rc2.
+- **The duplicate check has no shelf life on either line: nothing at the schema level prevents
+  duplicate rows.** Jellyfin 12 adds a `BaseItemImageInfoConfiguration` that 10.11 does not
+  have, and it declares `HasIndex(e => new { e.ItemId, e.ImageType })` **without** `IsUnique`.
+  A first reading of this said 10.11 has no index on the table at all; that is wrong and was
+  caught by re-reading the migration - 10.11 carries the single-column
+  `IX_BaseItemImageInfos_ItemId` that EF's foreign-key convention produces, and
+  `20260206224832_IndexOptimizations` **drops** it on v12 in favour of the composite one. The
+  performance conclusion first drawn from the wrong version - that the grouped query is a full
+  scan on 10.11 - is withdrawn rather than corrected, because no query plan was ever measured
+  to support it either way.
+- Findings are grouped rather than emitted per row, and that is what gives the pair a unique
+  key. The object-model half cannot see a row's primary key - the mapper drops it - so per-row
+  findings about identical rows would tie on every field, and the two halves could agree on the
+  set while differing in order. That is the fault `SortEpisodes` and `SortMovies` were fixed for
+  in 11.15.0.0, and here no tiebreaker exists to fix it with.
 
 ## [11.24.0.0] / [12.24.0.0] - 2026-09-14
 
