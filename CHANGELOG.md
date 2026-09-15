@@ -8,15 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- **A claim written into `ImageInfo`'s own remarks, corrected before release rather than after.**
-  The first draft said the image row count is something HTTP cannot answer at all. It is not:
-  `BaseItemDto.ImageTags` is a `Dictionary<ImageType, string>` and does hide duplicates, but
-  `GET /Items/{id}/Images` walks `item.ImageInfos` and emits one entry per entry in both of its
-  passes, so duplicates are visible there. The real argument is the one `MediaInfoDB` already
-  rests on - the server can only be asked one item at a time, and that is 164,000 calls on the
-  reference library - and the remarks now say that instead. A negative claim about every route,
-  drawn from the one route that was actually looked at, is the shape recorded twice on
-  2026-09-14; this is the third, and the only one caught before it shipped.
 - `build.ps1 -Publish` now pushes the source commit **before** creating the releases, so the
   tags land on the commit that built the artifacts. `gh release create` makes the tag on the
   **remote**, at whatever the default branch points at there; it never sees the local HEAD. The
@@ -96,6 +87,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `-Changelog` still overwrites, which was checked rather than assumed.
 
 ### Added
+- `build.ps1 -Publish`: creates one GitHub release per artifact and pushes the updated
+  `manifest.json`, in that order. A manifest entry whose release does not exist yet is a
+  failed download in the dashboard, so the releases go first, each uploaded ZIP is fetched
+  back and its MD5 compared against the manifest - what Jellyfin itself does before
+  installing - and the manifest follows only after that. Refuses up front on an empty
+  changelog, missing or unauthenticated `gh`, uncommitted plugin source, or a version
+  whose release already exists. The checks sit before the build on purpose: a refused run
+  had otherwise already rewritten `manifest.json`, replacing the changelog of an
+  already published version in the working copy.
+- `logo.webp` as the catalogue tile, referenced from `manifest.json` via `imageUrl`.
+  240x240 with a real alpha channel (`VP8X` + `ALPH`), 15.8 KB - it sits on Jellyfin's
+  dark dashboard without a background box. Deliberately no new plugin version: the logo
+  lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
+  and `11.1.0.1` / `12.1.0.1` remain valid.
+
+## [11.25.0.0] / [12.25.0.0] - 2026-09-15
+
+### Added
 - `GET /JFLint/ImageInfo` and `…DB` - findings about the rows in `BaseItemImageInfos`: an image
   described by more than one row, an image whose stored width or height is zero, and an image
   with no blurhash. One finding per **image** and check rather than per row, each carrying how
@@ -119,20 +128,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Not a narrowing but a requirement: an unrestricted `GetItemList` dies on the first row whose
   `Type` no longer resolves to a class, and a database half without the same list would report
   rows its twin can never return.
-- `build.ps1 -Publish`: creates one GitHub release per artifact and pushes the updated
-  `manifest.json`, in that order. A manifest entry whose release does not exist yet is a
-  failed download in the dashboard, so the releases go first, each uploaded ZIP is fetched
-  back and its MD5 compared against the manifest - what Jellyfin itself does before
-  installing - and the manifest follows only after that. Refuses up front on an empty
-  changelog, missing or unauthenticated `gh`, uncommitted plugin source, or a version
-  whose release already exists. The checks sit before the build on purpose: a refused run
-  had otherwise already rewritten `manifest.json`, replacing the changelog of an
-  already published version in the working copy.
-- `logo.webp` as the catalogue tile, referenced from `manifest.json` via `imageUrl`.
-  240x240 with a real alpha channel (`VP8X` + `ALPH`), 15.8 KB - it sits on Jellyfin's
-  dark dashboard without a background box. Deliberately no new plugin version: the logo
-  lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
-  and `11.1.0.1` / `12.1.0.1` remain valid.
+
+### Fixed
+- **A claim written into `ImageInfo`'s own remarks, corrected before release rather than after.**
+  The first draft said the image row count is something HTTP cannot answer at all. It is not:
+  `BaseItemDto.ImageTags` is a `Dictionary<ImageType, string>` and does hide duplicates, but
+  `GET /Items/{id}/Images` walks `item.ImageInfos` and emits one entry per entry in both of its
+  passes, so duplicates are visible there. The real argument is the one `MediaInfoDB` already
+  rests on - the server can only be asked one item at a time, and that is 164,000 calls on the
+  reference library - and the remarks now say that instead. A negative claim about every route,
+  drawn from the one route that was actually looked at, is the shape recorded twice on
+  2026-09-14; this is the third, and the only one caught before it shipped.
 
 ### Verified
 - **`Blurhash` is a `byte[]`, not text, and that silently breaks the obvious health query.**
@@ -147,6 +153,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   column returns 1, so it is the storage class and not the operator. Both halves therefore ask
   for length, and the object-model half uses `IsNullOrEmpty` because the mapper decodes a
   zero-length blob to `""`.
+- **That correction found a real defect and not merely a sloppy operator**, which was not known
+  when it was made. The calling tool re-ran its own health query with the length form on the
+  reference server and reports **75 empty blobs** among 130,837 rows, against **0** nulls - so
+  its published "0 of 130,783 images lack a blurhash" was wrong in substance, not only in
+  method. Their measurement, not this project's, and repeated here because it is what turns the
+  third finding kind from preventive into live. It also means all three kinds return rows on
+  this library from the first run, so the pair gets a real comparison instead of the "0 rows on
+  both halves, nothing was compared" case.
+- Their conclusion drawn from the old number - that blurhash recomputation could not explain a
+  2h19 library scan - happens to survive at 75, since that is 0.06 % of the rows. It is recorded
+  as surviving rather than as confirmed: it had been resting on a measurement nobody had made.
 - **Every query shape was checked for translation on both EF Core lines before it was written,
   with a negative control.** This project has a scar exactly here: `Contains('.')` once compiled
   clean, translated on EF Core 10 and threw at query time on the whole EF Core 9 line Jellyfin
