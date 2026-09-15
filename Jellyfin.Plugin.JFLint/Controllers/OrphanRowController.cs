@@ -54,6 +54,14 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// a table with none can hold any number of dangling guids and this route will never say so.
 /// </para>
 /// <para>
+/// <b>And <c>TableRows</c> is that same argument one level down.</b> An <b>empty</b> table with
+/// a declared foreign key also reports <c>RowCount = 0</c> - correctly, and meaninglessly,
+/// because an empty table cannot produce a violation. Without the row count it reads exactly
+/// like <c>AncestorIds.ParentItemId</c>'s zero, which is a real finding across 251,970 rows.
+/// Two of the seventeen relations on the reference server are that shape. Raised by the first
+/// caller against this route's own reasoning, which is the best kind of report to get.
+/// </para>
+/// <para>
 /// <b>The complement is <c>OrphanedItem</c></b>, which looks for item rows pointing at vanished
 /// items through exactly those undeclared columns - <c>SeriesId</c>, <c>SeasonId</c>,
 /// <c>ParentId</c>. Between the two there is still a gap, and naming it is better than implying
@@ -152,6 +160,8 @@ public class OrphanRowController(IDbContextFactory<JellyfinDbContext> dbContextF
                 .GroupBy(row => row.TableName, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Count(row => row.FkId is not null), StringComparer.Ordinal);
 
+            var tableRows = await CountRowsAsync(dbContext, perTable.Keys, cancellationToken).ConfigureAwait(false);
+
             var findings = declared.Select(row => new OrphanRowFindingDto(
                 row.TableName,
                 row.ColumnName,
@@ -160,11 +170,80 @@ public class OrphanRowController(IDbContextFactory<JellyfinDbContext> dbContextF
                     ? null
                     : violations.FirstOrDefault(v =>
                         string.Equals(v.TableName, row.TableName, StringComparison.Ordinal) && v.FkId == row.FkId)?.Rows ?? 0,
-                perTable[row.TableName]));
+                perTable[row.TableName],
+                tableRows.TryGetValue(row.TableName, out var total) ? total : 0));
 
             return Ok(Sorted(findings));
         }
     }
+
+    /// <summary>
+    /// Counts the rows of each named table.
+    /// </summary>
+    /// <param name="dbContext">The database context.</param>
+    /// <param name="tables">The table names, taken from <c>sqlite_master</c>.</param>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <returns>Table name to row count.</returns>
+    /// <remarks>
+    /// <para>
+    /// <b>This is the one place in this plugin where SQL is assembled rather than written, and
+    /// it is not a shortcut.</b> SQLite has no catalogue view carrying row counts, and a table
+    /// name cannot be a parameter - so a count per table needs its name inside the statement
+    /// whichever way it is done. One <c>UNION ALL</c> is that same unavoidable interpolation,
+    /// performed once instead of once per round trip.
+    /// </para>
+    /// <para>
+    /// The names come from <c>sqlite_master</c>, so they are the database's own, never a
+    /// caller's - this route takes no parameters at all. They are quoted anyway, by the two
+    /// rules SQLite defines: an identifier in double quotes with embedded double quotes
+    /// doubled, a literal in single quotes with embedded single quotes doubled. Relying on
+    /// "the input is trusted" is how the next reader learns the wrong lesson from this method.
+    /// </para>
+    /// <para>
+    /// <c>COUNT(*)</c> lets SQLite walk the smallest index rather than the table, so this costs
+    /// far less than the foreign-key check it accompanies.
+    /// </para>
+    /// </remarks>
+    private static async Task<Dictionary<string, long>> CountRowsAsync(
+        JellyfinDbContext dbContext,
+        IEnumerable<string> tables,
+        CancellationToken cancellationToken)
+    {
+        var names = tables.ToList();
+        if (names.Count == 0)
+        {
+            // Not defensive decoration: joining an empty list would produce an empty statement,
+            // which is a syntax error rather than an empty result.
+            return new Dictionary<string, long>(StringComparer.Ordinal);
+        }
+
+        var sql = string.Join(
+            " UNION ALL ",
+            names.Select(name =>
+                $"SELECT {QuoteLiteral(name)} AS \"TableName\", COUNT(*) AS \"Rows\" FROM {QuoteIdentifier(name)}"));
+
+        var rows = await dbContext.Database.SqlQueryRaw<TableRowCount>(sql)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return rows.ToDictionary(row => row.TableName, row => row.Rows, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Quotes a SQLite identifier.
+    /// </summary>
+    /// <param name="name">The identifier.</param>
+    /// <returns>The identifier in double quotes, with embedded double quotes doubled.</returns>
+    private static string QuoteIdentifier(string name)
+        => "\"" + name.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
+
+    /// <summary>
+    /// Quotes a SQLite string literal.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <returns>The value in single quotes, with embedded single quotes doubled.</returns>
+    private static string QuoteLiteral(string value)
+        => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
 
     /// <summary>
     /// Orders the findings deterministically, so two runs can be compared line by line.
@@ -197,6 +276,18 @@ public class OrphanRowController(IDbContextFactory<JellyfinDbContext> dbContextF
 
         /// <summary>Gets or sets how many rows violate it.</summary>
         public int Rows { get; set; }
+    }
+
+    /// <summary>
+    /// One table and how many rows it holds.
+    /// </summary>
+    private sealed class TableRowCount
+    {
+        /// <summary>Gets or sets the table.</summary>
+        public string TableName { get; set; } = string.Empty;
+
+        /// <summary>Gets or sets how many rows it holds.</summary>
+        public long Rows { get; set; }
     }
 
     /// <summary>

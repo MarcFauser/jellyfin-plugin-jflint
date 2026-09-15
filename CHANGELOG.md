@@ -102,6 +102,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.27.0.0] / [12.27.0.0] - 2026-09-15
+
+### Added
+- `OrphanRowsDB` now carries `TableRows`, and it is the previous release's own argument one
+  level down. An **empty** table with a declared foreign key reports `RowCount = 0` - correctly,
+  and meaninglessly, because an empty table cannot produce a violation. Without the row count
+  beside it that zero reads exactly like `AncestorIds.ParentItemId`'s zero, which is a real
+  finding across **251,970** rows. Two of the seventeen relations on the reference server are
+  that shape: `BaseItemMetadataFields` and `BaseItemTrailerTypes`, both empty.
+- Raised by the calling tool against this route's own reasoning, one release after that
+  reasoning shipped - which is the best kind of report to get, and the reason it is in by the
+  same evening rather than on a list.
+
+### Verified
+- **The row count is the one place in this plugin where SQL is assembled rather than written,
+  and that is unavoidable rather than convenient.** SQLite has no catalogue view carrying row
+  counts and a table name cannot be a parameter, so the name has to reach the statement
+  somehow; one `UNION ALL` does that interpolation once instead of once per round trip.
+- The names come from `sqlite_master`, never from a caller - the route takes no parameters at
+  all - and they are quoted anyway, by SQLite's two rules: identifiers in double quotes with
+  embedded double quotes doubled, literals in single quotes with embedded single quotes
+  doubled. Measured against a table deliberately named `we"ird`, **with the control that the
+  unquoted form is rejected** (`unrecognized token: ""ird"`). Without that control the passing
+  test would only have shown that ordinary names work, which was never in doubt.
+- `CA2100` does not fire here and the build stays at 0 warnings under `TreatWarningsAsErrors`;
+  no suppression was needed and none was added.
+- `COUNT(*)` lets SQLite walk the smallest index rather than the table, so this costs far less
+  than the foreign-key check it accompanies.
+
+### Changed
+- The suite reports relations sitting on an empty table separately, with a control that
+  `TableRows` is populated at all - a field that came back uniformly zero would flag every
+  relation as hollow and look like a finding.
+
 ## [11.26.0.0] / [12.26.0.0] - 2026-09-15
 
 ### Added

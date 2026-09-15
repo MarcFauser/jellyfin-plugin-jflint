@@ -32,9 +32,17 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// <param name="DeclaredForeignKeys">How many foreign keys the table declares in total. Zero
 /// says the table is outside the check by construction - any dangling reference it holds is
 /// invisible here however broken, because SQLite was never told to enforce it.</param>
+/// <param name="TableRows">How many rows the table holds, which is what makes
+/// <see cref="RowCount"/> readable. <b>A zero over an empty table is not a clean bill of
+/// health</b> - an empty table cannot produce a violation, so its zero says nothing about
+/// anything, while a zero over a quarter of a million rows is a real finding. Without this
+/// field the two render identically, which is the same mistake as conflating null with zero,
+/// one level down. Reported by the first caller, who found two such relations on the reference
+/// server.</param>
 public sealed record OrphanRowFindingDto(
     string Table,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Column,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Parent,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? RowCount,
-    int DeclaredForeignKeys);
+    int DeclaredForeignKeys,
+    long TableRows);
