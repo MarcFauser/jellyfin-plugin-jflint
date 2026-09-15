@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.26.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.26.0.0/jellyfin-plugin-jflint_12.26.0.0.zip",
+        "checksum": "b49656382876a3787ea8458a54b559ea",
+        "changelog": "Adds GET /JFLint/OrphanRowsDB: rows whose parent row is gone, one line per declared foreign key, plus the tables that declare none and are therefore outside the check. On the reference library PRAGMA foreign_key_check reports 202,806 such rows across ten tables, every one pointing at BaseItems - and that single parent is a finding rather than a property of the schema, since four of those tables can reference a second parent and none of those sides is violated. It is not a broken cascade: the constraints carry ON DELETE CASCADE and it fires, measured on both lines. Orphans come from a window in which enforcement is off, which is ordinary because SQLite cannot alter a constraint in place and a table rebuild runs with foreign keys disabled. The rows with nothing to report are included on purpose: a foreign key with no violations returns zero, a table declaring none returns null, and rendering both as an empty list would be a check that cannot fail. This route has no object-model twin because none can exist - the rows are defined by their parent being gone, so there is nothing for the library side to return.",
+        "timestamp": "2026-09-15T15:48:56Z"
+      },
+      {
         "version": "12.25.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.25.0.0/jellyfin-plugin-jflint_12.25.0.0.zip",
@@ -246,6 +254,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.26.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.26.0.0/jellyfin-plugin-jflint_11.26.0.0.zip",
+        "checksum": "7c7eb4034c0f6afabe38f47621434558",
+        "changelog": "Adds GET /JFLint/OrphanRowsDB: rows whose parent row is gone, one line per declared foreign key, plus the tables that declare none and are therefore outside the check. On the reference library PRAGMA foreign_key_check reports 202,806 such rows across ten tables, every one pointing at BaseItems - and that single parent is a finding rather than a property of the schema, since four of those tables can reference a second parent and none of those sides is violated. It is not a broken cascade: the constraints carry ON DELETE CASCADE and it fires, measured on both lines. Orphans come from a window in which enforcement is off, which is ordinary because SQLite cannot alter a constraint in place and a table rebuild runs with foreign keys disabled. The rows with nothing to report are included on purpose: a foreign key with no violations returns zero, a table declaring none returns null, and rendering both as an empty list would be a check that cannot fail. This route has no object-model twin because none can exist - the rows are defined by their parent being gone, so there is nothing for the library side to return.",
+        "timestamp": "2026-09-15T15:48:56Z"
       },
       {
         "version": "11.25.0.0",
