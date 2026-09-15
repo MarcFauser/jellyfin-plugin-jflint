@@ -162,6 +162,12 @@ public class OrphanRowController(IDbContextFactory<JellyfinDbContext> dbContextF
 
             var tableRows = await CountRowsAsync(dbContext, perTable.Keys, cancellationToken).ConfigureAwait(false);
 
+            // Both lookups below use the indexer, deliberately, rather than a TryGetValue with a
+            // fallback. Every dictionary here is built from the same sqlite_master names in the
+            // same context, so a missing key is a broken assumption of mine rather than a state
+            // to absorb - and for TableRows zero is the one value that must never be invented,
+            // because zero is what means "this table is empty" and would be read as a finding.
+            // A substituted plausible number is worse than a 500.
             var findings = declared.Select(row => new OrphanRowFindingDto(
                 row.TableName,
                 row.ColumnName,
@@ -171,7 +177,7 @@ public class OrphanRowController(IDbContextFactory<JellyfinDbContext> dbContextF
                     : violations.FirstOrDefault(v =>
                         string.Equals(v.TableName, row.TableName, StringComparison.Ordinal) && v.FkId == row.FkId)?.Rows ?? 0,
                 perTable[row.TableName],
-                tableRows.TryGetValue(row.TableName, out var total) ? total : 0));
+                tableRows[row.TableName]));
 
             return Ok(Sorted(findings));
         }

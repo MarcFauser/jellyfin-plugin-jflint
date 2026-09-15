@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **`OrphanRowsDB` built the very trap it exists to describe, in its own code.** `TableRows` was
+  read with a `TryGetValue` falling back to **0** when a table had no count - and zero is
+  precisely the value that means "this table is empty", which the release that added the field
+  argues must never be confused with "clean". A missing count would have rendered as a hollow
+  relation: a finding made entirely of an absent value. Now the indexer, so a broken assumption
+  is a 500 rather than a plausible number.
+- The path is unreachable today - both dictionaries are built from the same `sqlite_master`
+  names in the same context - which is exactly why it should not have been written. A fallback
+  for an impossible case costs nothing until it fires, and then it lies. Found because the
+  calling tool reported the same shape from its own side: reading `TableRows` as a plain `int`
+  against a server still running the previous release would have marked all 28 relations hollow,
+  a spectacular finding made of a missing field.
 - `build.ps1 -Publish` now pushes the source commit **before** creating the releases, so the
   tags land on the commit that built the artifacts. `gh release create` makes the tag on the
   **remote**, at whatever the default branch points at there; it never sees the local HEAD. The
