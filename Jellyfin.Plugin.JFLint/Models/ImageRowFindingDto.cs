@@ -40,7 +40,15 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// <param name="RowCount">How many rows of this image the finding covers. For
 /// <see cref="ImageFindingKind.ImageRowDuplicated"/> that is every row describing the image and
 /// is always greater than one; for the other kinds it is how many of those rows carry the
-/// flaw, which is one unless the image is also duplicated.</param>
+/// flaw, which is one unless the image is also duplicated.
+/// <para>
+/// <b>The unit trap, reported by the first caller to hit it.</b> A finding is per image, so the
+/// number of findings is not the number of rows - <c>SUM(RowCount)</c> within a kind is the row
+/// count, and that is the only figure comparable with a <c>COUNT(*)</c> over the table. Setting
+/// the two side by side and reading the difference as missing rows is the natural mistake,
+/// because <c>RowCount</c> is exactly what makes the units look interchangeable. When the two
+/// really do differ after summing, see the blind spot on the controller.
+/// </para></param>
 /// <param name="Kind">Which check produced this row, from <see cref="ImageFindingKind"/>.</param>
 public sealed record ImageRowFindingDto(
     Guid ItemId,

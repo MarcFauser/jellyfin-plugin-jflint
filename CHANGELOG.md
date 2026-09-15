@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- `ImageInfo`'s remarks now measure the blind spot instead of only naming it, and say plainly
+  that a finding count is not a row count. Both came from the first real run: the calling tool
+  compared a `COUNT(*)` over the table against the number of findings and read the difference
+  as missing rows. That is the natural mistake, because `RowCount` is exactly the field that
+  makes the two units look interchangeable - `SUM(RowCount)` within a kind is the row count,
+  and nothing else is comparable with the table.
+- **The blind spot turned out not to be empty, and a guess made about it here was wrong.** On
+  the reference library 75 rows carry no blurhash and 70 are reported, 1 row has no dimensions
+  and 0 are reported. The explanation offered from this side - that five rows collapse into a
+  duplicated image - was refuted by the reconciliation it came with: `SUM(RowCount)` is 70, not
+  75, and the one duplicated image is a person's poster unrelated to the blurhash rows. Six rows
+  are genuinely unreachable by **both** halves, which is why the pair still agrees.
+- What remains are the two documented causes - an image row belonging to no `BaseItems` row, or
+  to one whose `Type` is not in `BaseItemKindNames` - and which it is has not been established
+  yet. Recorded as open rather than as either, since the cheap explanation has already been
+  wrong once here. Widening the type list is not available as a fix: an unrestricted
+  `GetItemList` dies on the first unknown type on this server, which is why the restriction
+  exists at all.
+- Documentation only, so it travels with whatever release comes next rather than prompting one.
+
 ### Fixed
 - `build.ps1 -Publish` now pushes the source commit **before** creating the releases, so the
   tags land on the commit that built the artifacts. `gh release create` makes the tag on the

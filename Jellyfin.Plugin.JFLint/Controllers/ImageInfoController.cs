@@ -90,12 +90,27 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// list or it would report image rows belonging to items its twin can never return.
 /// </para>
 /// <para>
-/// <b>A blind spot both halves share, written down rather than left to be discovered.</b> An
-/// image row whose <c>ItemId</c> names an item that no longer exists is invisible here: the
-/// database half inner-joins it away and the object-model half has no item to reach it from.
-/// Deleting an item removes its rows in the same transaction, so this should not be reachable -
-/// but "should not" is not "cannot", and a pair that agrees on a row neither half can see is
-/// not evidence about it.
+/// <b>A blind spot both halves share - and it is not empty, which was measured on the first
+/// run.</b> A row is unreachable here when it belongs to no <c>BaseItems</c> row at all, or to
+/// one whose <c>Type</c> is not in <c>BaseItemKindNames</c>: the database half inner-joins it
+/// away, and the object-model half never materialises such an item to read images from. Both
+/// halves drop the same rows, so the pair still agrees - agreement about a row neither half can
+/// see is not evidence about it.
+/// </para>
+/// <para>
+/// On the reference library that blind spot holds <b>6 rows</b>: 75 rows carry no blurhash and
+/// 70 are reported, 1 row has no dimensions and 0 are reported. The grouping does not account
+/// for it - <c>SUM(RowCount)</c> comes to 70, not 75, and the one duplicated image is a
+/// person's poster unrelated to the others. Which of the two causes it is has not been
+/// established at the time of writing; the query that separates them is a <c>LEFT JOIN</c> onto
+/// <c>BaseItems</c> grouped by <c>Type</c>, where a null type means an orphan and a real one
+/// means an item kind this plugin deliberately does not name.
+/// </para>
+/// <para>
+/// Widening the type list is not the fix, and that is the reason this stays a documented limit
+/// rather than a defect: an unrestricted <c>GetItemList</c> dies on the first unknown type, on
+/// this very server. The honest position is that the route reports what both halves can see,
+/// and says here how much it cannot.
 /// </para>
 /// <para>
 /// Requires elevation, like everything else here, because the responses carry file paths.
