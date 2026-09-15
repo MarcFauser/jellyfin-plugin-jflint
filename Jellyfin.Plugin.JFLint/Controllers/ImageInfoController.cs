@@ -119,9 +119,30 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// a window is the obvious suspect and is <b>not</b> measured.
 /// </para>
 /// <para>
+/// <b>And the image table is a tenth of it.</b> <c>PRAGMA foreign_key_check</c> over the whole
+/// reference database reports <b>202,806</b> violations across ten tables - 80,986 in
+/// <c>PeopleBaseItemMap</c>, 50,639 in <c>MediaStreamInfos</c>, 23,313 in <c>AncestorIds</c>,
+/// 15,589 in <c>Chapters</c>, then these 11,920, and on down - and <b>every one of them points
+/// at <c>BaseItems</c></b>. That is not a property of the schema: four of those ten tables can
+/// reference a second parent (<c>Peoples</c>, <c>ItemValues</c>, <c>Users</c>), and not one of
+/// those sides is violated. Enforcement did not lapse in general; <c>BaseItems</c> rows went
+/// missing.
+/// </para>
+/// <para>
+/// So this is not a quirk of one route. <b>Every database half here inner-joins to
+/// <c>BaseItems</c> and is blind to its own share of that population</b> - <c>MediaInfoDB</c>
+/// to the 50,639 stream rows, the provider routes to the 10,460 provider rows. The library
+/// halves are blind to the same rows for the same reason, which is why the pairs still agree.
+/// <c>OrphanedItem</c> is the complement rather than the exception: it looks for item rows
+/// pointing at vanished items through <b>undeclared</b> columns, which is precisely what
+/// <c>foreign_key_check</c> cannot see. Between the two there is still a gap.
+/// </para>
+/// <para>
 /// Anyone chasing this should reach for <c>PRAGMA foreign_key_check</c> rather than writing a
-/// correlated <c>NOT EXISTS</c>: one statement, table and rowid per violation, and no index to
-/// worry about.
+/// correlated <c>NOT EXISTS</c>: one statement, table and rowid per violation, no index to
+/// worry about, and it reports every violation rather than the one that was asked about. Note
+/// it only sees <b>declared</b> foreign keys, so a clean result is a statement about what
+/// SQLite was told to enforce and not about the database.
 /// </para>
 /// <para>
 /// Widening the type list is not the fix, and that is the reason this stays a documented limit

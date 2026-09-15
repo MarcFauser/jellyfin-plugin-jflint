@@ -7,39 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- `ImageInfo`'s remarks now measure the blind spot instead of only naming it, and say plainly
-  that a finding count is not a row count. Both came from the first real run: the calling tool
-  compared a `COUNT(*)` over the table against the number of findings and read the difference
-  as missing rows. That is the natural mistake, because `RowCount` is exactly the field that
-  makes the two units look interchangeable - `SUM(RowCount)` within a kind is the row count,
-  and nothing else is comparable with the table.
-- **The blind spot turned out not to be empty, and a guess made about it here was wrong.** On
-  the reference library 75 rows carry no blurhash and 70 are reported, 1 row has no dimensions
-  and 0 are reported. The explanation offered from this side - that five rows collapse into a
-  duplicated image - was refuted by the reconciliation it came with: `SUM(RowCount)` is 70, not
-  75, and the one duplicated image is a person's poster unrelated to the blurhash rows. Six rows
-  are genuinely unreachable by **both** halves, which is why the pair still agrees.
-- **It is the orphan case, and it is far larger than the six rows that prompted it: 11,920 rows,
-  9.1 % of the table.** Measured by the calling tool with the control this project asked for -
-  118,917 of 130,837 rows do match a `BaseItems` row, so the predicate is not dead - plus checks
-  that both sides store the id as `text` and that case is not the cause. Widening the type list
-  would not have helped and is not available anyway: an unrestricted `GetItemList` dies on the
-  first unknown type on this server, which is why the restriction exists.
-- **Not a broken cascade, which is what it looks like.** The foreign key does carry
-  `ON DELETE CASCADE`, EF emits it by convention for a required navigation, and it fires -
-  measured here on both EF lines, with `Microsoft.Data.Sqlite` turning `PRAGMA foreign_keys` on
-  by default and the dependent rows going even through `ExecuteDeleteAsync`. So these rows did
-  not come from an ordinary delete. What produces them is a window with enforcement switched
-  off, which is ordinary rather than exotic: SQLite cannot alter a constraint in place, so a
-  table rebuild runs with foreign keys disabled - and switching them back on does **not**
-  re-validate what is already stored. That mechanism is measured; that Jellyfin's own migration
-  history took such a window is the obvious suspect and is **not**.
-- The remarks now name `PRAGMA foreign_key_check` for anyone chasing this: one statement, table
-  and rowid per violation, no index to get wrong, and it finds every violation rather than the
-  one that was asked about.
-- Documentation only, so it travels with whatever release comes next rather than prompting one.
-
 ### Fixed
 - `build.ps1 -Publish` now pushes the source commit **before** creating the releases, so the
   tags land on the commit that built the artifacts. `gh release create` makes the tag on the
@@ -134,6 +101,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   dark dashboard without a background box. Deliberately no new plugin version: the logo
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
+
+## [11.26.0.0] / [12.26.0.0] - 2026-09-15
+
+### Added
+- `GET /JFLint/OrphanRowsDB` - rows whose parent row is gone, one line per declared foreign key,
+  plus the tables that declare none and are therefore outside the check.
+- **The occasion, measured on the reference library:** `PRAGMA foreign_key_check` reports
+  **202,806** violations across ten tables - 80,986 `PeopleBaseItemMap`, 50,639
+  `MediaStreamInfos`, 23,313 `AncestorIds`, 15,589 `Chapters`, 11,920 `BaseItemImageInfos`,
+  10,460 `BaseItemProviders`, 6,365 `ItemValuesMap`, 2,717 `UserData`, 418 `KeyframeData`, 399
+  `AttachmentStreamInfos` - and every one points at `BaseItems`. The image figure matches the
+  independent `NOT EXISTS` count to the row, which is the control that the pragma is not
+  looking at something narrower.
+- **That single parent is a finding rather than a property of the schema**, and it was checked
+  rather than assumed: four of those ten tables can reference a second parent - `PeopleBaseItemMap`
+  to `Peoples`, `ItemValueMap` to `ItemValues`, `UserData` to `Users` - and not one of those
+  sides is violated. Reflected out of the shipped 12.0.0 assembly, with a control in both
+  directions so the probe distinguishes rather than always answering the same. Enforcement did
+  not lapse in general; `BaseItems` rows went missing.
+- **Not a broken cascade.** The constraints carry `ON DELETE CASCADE`, EF emits them by
+  convention for a required navigation, `Microsoft.Data.Sqlite` turns `PRAGMA foreign_keys` on
+  by default, and the cascade fires - measured on both EF lines, including through
+  `ExecuteDeleteAsync`. Orphans come from a window with enforcement off, which is ordinary
+  rather than exotic: SQLite cannot alter a constraint in place, so a table rebuild runs with
+  foreign keys disabled, and switching them back on does **not** re-validate what is stored.
+  The mechanism is measured; **which event on this database took such a window is not**, and
+  the route does not claim to know.
+
+### Changed
+- **The route reports the rows with nothing to report, and that is the design rather than
+  padding.** A foreign key with no violations comes back as `RowCount = 0`; a table declaring
+  none comes back as `RowCount = null` with `DeclaredForeignKeys = 0`. Reporting only what was
+  found would render "clean" and "could not look" as one empty list - a guard that cannot fire.
+  `PRAGMA foreign_key_check` sees **declared** foreign keys only, so a table with none can hold
+  any number of dangling guids and this route will never say so. `OrphanedItem` is the
+  complement, looking for exactly those undeclared references, and between the two there is
+  still a gap.
+- Grouped by **foreign key**, not by table: `AncestorIds` points at `BaseItems` twice, once for
+  the row's own item and once for the ancestor it names, and collapsing them hides which
+  reference broke. The child column name comes from joining `pragma_foreign_key_list` on `fkid`.
+- **No twin, and the reason is stronger than `MediaInfoDB`'s.** That one is alone because its
+  twin would be possible and merely far too slow. Here no twin can exist: the rows are defined
+  by their parent being gone, so there is nothing for `ILibraryManager` to return. A half that
+  cannot see the subject by construction would not be a check. Second exemption from the
+  two-route rule in this plugin, and the second one with a reason that can be written down.
+- **`ImageInfo`'s remarks now measure their blind spot instead of only naming it**, and carry
+  the database-wide figure rather than only the image one: the pair is blind to its own share
+  of a population of 202,806, and every other database half here has the same blind spot for
+  its own table - `MediaInfoDB` to the 50,639 stream rows, the provider routes to the 10,460
+  provider rows. The library halves are blind to the same rows for the same reason, which is
+  why the pairs still agree.
+- **A guess made here about that blind spot was wrong and is recorded as such.** When the caller
+  reported 70 findings against 75 rows, the explanation offered from this side was that five
+  rows collapse into a duplicated image. The reconciliation handed over with it disproved it:
+  `SUM(RowCount)` is 70, not 75, and the one duplicated image is a person's poster unrelated to
+  the blurhash rows. There was nothing to collapse, and the six rows are genuinely unreachable.
+- The DTO now says plainly that **a finding count is not a row count** - `SUM(RowCount)` within
+  a kind is, and it is the only figure comparable with a `COUNT(*)` over the table. Asked for by
+  the caller, who tripped on exactly that, and it is the natural mistake: `RowCount` is the very
+  field that makes the two units look interchangeable.
+
+### Verified
+- Both statements were generated **and executed** against SQLite on EF Core 9.0.11 and 10.0.11
+  before the route was written, on a seeded database carrying all four cases at once: a
+  violated key (`images.ItemId -> parents : 2`), a clean key (`tags.ItemId -> parents : 0`), a
+  table with no key, and a parent table. The clean-versus-unchecked pair is the control that
+  matters - without a clean key in the fixture the probe could not show the two come out as
+  different values rather than both as empty.
+- `pragma_foreign_key_check` reports violations **even with `PRAGMA foreign_keys = OFF`**, so a
+  zero from this route is a real zero rather than "the connection had enforcement disabled, so
+  nothing was checked". Measured, both lines.
+- Raw SQL rather than LINQ because EF Core has no LINQ surface for SQLite's table-valued
+  pragmas - there is nothing to translate. Two statements and a merge in memory rather than one
+  joined query: calling the check correlated per table would run the whole check once per table.
 
 ## [11.25.0.0] / [12.25.0.0] - 2026-09-15
 
