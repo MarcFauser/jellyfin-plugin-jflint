@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.27.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.27.0.0/jellyfin-plugin-jflint_12.27.0.0.zip",
+        "checksum": "f47d434bf985876723dd596ded55691c",
+        "changelog": "OrphanRowsDB gains TableRows, which is the previous release's own argument one level down. A foreign key on an EMPTY table reports zero violations - correctly, and meaninglessly, because an empty table cannot produce one. Without the row count beside it that zero reads exactly like a zero measured over a quarter of a million rows, and two of the seventeen relations on the reference server are that shape. The count comes from one assembled UNION ALL over the table names in sqlite_master, which is unavoidable rather than convenient: SQLite has no catalogue view carrying row counts and a table name cannot be a parameter. The names are the database's own and are quoted by SQLite's rules anyway, measured against a table deliberately named with an embedded quote and with the control that the unquoted form is rejected.",
+        "timestamp": "2026-09-15T16:02:59Z"
+      },
+      {
         "version": "12.26.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.26.0.0/jellyfin-plugin-jflint_12.26.0.0.zip",
@@ -254,6 +262,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.27.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.27.0.0/jellyfin-plugin-jflint_11.27.0.0.zip",
+        "checksum": "e91edc0337df243c08778fcc967545a6",
+        "changelog": "OrphanRowsDB gains TableRows, which is the previous release's own argument one level down. A foreign key on an EMPTY table reports zero violations - correctly, and meaninglessly, because an empty table cannot produce one. Without the row count beside it that zero reads exactly like a zero measured over a quarter of a million rows, and two of the seventeen relations on the reference server are that shape. The count comes from one assembled UNION ALL over the table names in sqlite_master, which is unavoidable rather than convenient: SQLite has no catalogue view carrying row counts and a table name cannot be a parameter. The names are the database's own and are quoted by SQLite's rules anyway, measured against a table deliberately named with an embedded quote and with the control that the unquoted form is rejected.",
+        "timestamp": "2026-09-15T16:02:59Z"
       },
       {
         "version": "11.26.0.0",
