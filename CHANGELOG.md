@@ -20,12 +20,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   duplicated image - was refuted by the reconciliation it came with: `SUM(RowCount)` is 70, not
   75, and the one duplicated image is a person's poster unrelated to the blurhash rows. Six rows
   are genuinely unreachable by **both** halves, which is why the pair still agrees.
-- What remains are the two documented causes - an image row belonging to no `BaseItems` row, or
-  to one whose `Type` is not in `BaseItemKindNames` - and which it is has not been established
-  yet. Recorded as open rather than as either, since the cheap explanation has already been
-  wrong once here. Widening the type list is not available as a fix: an unrestricted
-  `GetItemList` dies on the first unknown type on this server, which is why the restriction
-  exists at all.
+- **It is the orphan case, and it is far larger than the six rows that prompted it: 11,920 rows,
+  9.1 % of the table.** Measured by the calling tool with the control this project asked for -
+  118,917 of 130,837 rows do match a `BaseItems` row, so the predicate is not dead - plus checks
+  that both sides store the id as `text` and that case is not the cause. Widening the type list
+  would not have helped and is not available anyway: an unrestricted `GetItemList` dies on the
+  first unknown type on this server, which is why the restriction exists.
+- **Not a broken cascade, which is what it looks like.** The foreign key does carry
+  `ON DELETE CASCADE`, EF emits it by convention for a required navigation, and it fires -
+  measured here on both EF lines, with `Microsoft.Data.Sqlite` turning `PRAGMA foreign_keys` on
+  by default and the dependent rows going even through `ExecuteDeleteAsync`. So these rows did
+  not come from an ordinary delete. What produces them is a window with enforcement switched
+  off, which is ordinary rather than exotic: SQLite cannot alter a constraint in place, so a
+  table rebuild runs with foreign keys disabled - and switching them back on does **not**
+  re-validate what is already stored. That mechanism is measured; that Jellyfin's own migration
+  history took such a window is the obvious suspect and is **not**.
+- The remarks now name `PRAGMA foreign_key_check` for anyone chasing this: one statement, table
+  and rowid per violation, no index to get wrong, and it finds every violation rather than the
+  one that was asked about.
 - Documentation only, so it travels with whatever release comes next rather than prompting one.
 
 ### Fixed

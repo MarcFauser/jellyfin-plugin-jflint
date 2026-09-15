@@ -98,13 +98,30 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// see is not evidence about it.
 /// </para>
 /// <para>
-/// On the reference library that blind spot holds <b>6 rows</b>: 75 rows carry no blurhash and
-/// 70 are reported, 1 row has no dimensions and 0 are reported. The grouping does not account
-/// for it - <c>SUM(RowCount)</c> comes to 70, not 75, and the one duplicated image is a
-/// person's poster unrelated to the others. Which of the two causes it is has not been
-/// established at the time of writing; the query that separates them is a <c>LEFT JOIN</c> onto
-/// <c>BaseItems</c> grouped by <c>Type</c>, where a null type means an orphan and a real one
-/// means an item kind this plugin deliberately does not name.
+/// <b>On the reference library that blind spot holds 11,920 rows - 9.1 % of the table - and it
+/// is the orphan case, not the unknown-type one.</b> Six of them would have been findings: 75
+/// rows carry no blurhash against 70 reported, 1 row has no dimensions against 0 reported. The
+/// grouping does not account for that gap, which was the first explanation offered here and was
+/// wrong: <c>SUM(RowCount)</c> comes to 70 rather than 75, and the single duplicated image is a
+/// person's poster unrelated to the blurhash rows. Measured by the calling tool with the
+/// control that the join is not dead - 118,917 of 130,837 rows do match.
+/// </para>
+/// <para>
+/// <b>It is not a broken cascade, which is the tempting conclusion.</b> The foreign key really
+/// does carry <c>ON DELETE CASCADE</c>, EF emits it by convention for a required navigation,
+/// and it fires: measured on this stack, where <c>Microsoft.Data.Sqlite</c> turns
+/// <c>PRAGMA foreign_keys</c> on by default and the dependent rows go even through
+/// <c>ExecuteDeleteAsync</c>. So these rows cannot come from an ordinary delete. What does
+/// produce them is a window in which enforcement is off - and that is not exotic, since SQLite
+/// cannot alter a constraint in place and a table rebuild runs with foreign keys disabled.
+/// Turning enforcement back on does <b>not</b> re-validate what is already stored, so such rows
+/// survive silently and forever. All of that is measured; that Jellyfin's own history took such
+/// a window is the obvious suspect and is <b>not</b> measured.
+/// </para>
+/// <para>
+/// Anyone chasing this should reach for <c>PRAGMA foreign_key_check</c> rather than writing a
+/// correlated <c>NOT EXISTS</c>: one statement, table and rowid per violation, and no index to
+/// worry about.
 /// </para>
 /// <para>
 /// Widening the type list is not the fix, and that is the reason this stays a documented limit
