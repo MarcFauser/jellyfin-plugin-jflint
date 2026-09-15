@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **The hollow set cannot be derived, only measured - and the evidence is a wrong prediction made
+  from this side.** Told that `TableRows` would expose empty relations, this project predicted
+  exactly two on the reference server, reasoning from what its 10,997 missing items would have
+  touched. Measured against 11.27 it is **three**: the extra one is
+  `AccessSchedules.UserId -> Users`, an empty table with nothing whatever to do with the damage.
+  Hollowness is a property of the **table**, not of the fault being looked for, so reasoning
+  about the fault returns the relations one was already thinking about and omits the rest in
+  silence. That is a better argument for the field than "an empty table's zero carries no
+  information", which is what was put to the owner, and it is the caller's formulation rather
+  than this project's.
+- Two further tables read zero rows and stay in "not checked" rather than "hollow" -
+  `DeviceOptions` and `__EFMigrationsLock`, empty **and** unguarded. The ranking handles that
+  because "declares no foreign key" is the stronger statement and sorts first; it was not
+  designed for the case, and saying so is more useful than claiming foresight.
 - **`OrphanRowsDB`'s "not checked" rows stopped being an argument and became a measurement, on
   the route's first run.** Eleven tables on the reference server declare no foreign key, two of
   them `TrickplayInfos` and `MediaSegments` - which on a server that lost 10,997 media items is

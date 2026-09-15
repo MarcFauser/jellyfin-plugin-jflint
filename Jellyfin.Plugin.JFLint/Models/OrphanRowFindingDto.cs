@@ -37,8 +37,16 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// health</b> - an empty table cannot produce a violation, so its zero says nothing about
 /// anything, while a zero over a quarter of a million rows is a real finding. Without this
 /// field the two render identically, which is the same mistake as conflating null with zero,
-/// one level down. Reported by the first caller, who found two such relations on the reference
-/// server.</param>
+/// one level down. Reported by the first caller, who found three such relations on the reference
+/// server.
+/// <para>
+/// <b>And the set cannot be derived, only measured - which is the real argument for the field.</b>
+/// This project predicted two, reasoning from what the server's 10,997 missing items would have
+/// touched, and got it wrong: the third is <c>AccessSchedules.UserId -&gt; Users</c>, an empty
+/// table with nothing to do with the damage at all. Hollowness is a property of the <b>table</b>,
+/// not of the fault being looked for, so reasoning about the fault returns the relations one was
+/// already thinking about and silently omits the rest.
+/// </para></param>
 public sealed record OrphanRowFindingDto(
     string Table,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Column,
