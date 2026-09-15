@@ -68,6 +68,21 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// there is none.
 /// </para>
 /// <para>
+/// <b>That gap stopped being hypothetical on this route's first run.</b> Eleven tables on the
+/// reference server declare no foreign key, and two of them are <c>TrickplayInfos</c> and
+/// <c>MediaSegments</c> - which on a server that lost 10,997 media items is precisely where
+/// orphans would be expected. Measured directly, on <c>ItemId</c> in both cases: 1,616 of
+/// 29,802 trickplay rows and 505 of 16,458 segment rows, neither wholly orphaned so the column
+/// is the right one. That is <b>2,121 rows this route can never see</b>, and the whole reported
+/// total becomes 204,927 across twelve relations rather than 202,806 across ten.
+/// </para>
+/// <para>
+/// So the "not checked" rows earned their place by being read rather than by the argument made
+/// for them: the category did not report a fault, it reported that nobody was looking, and
+/// there turned out to be something to look at. A route that had listed only its violations
+/// would have shown the same ten lines and said nothing about the two.
+/// </para>
+/// <para>
 /// <b>No twin, and the reason is stronger than <c>MediaInfoDB</c>'s.</b> That route is alone
 /// because <c>MediaStreamQuery.ItemId</c> is a non-nullable <c>Guid</c>, so its twin would be
 /// possible and merely far too slow. Here no twin can exist at all: these rows are defined by

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **`OrphanRowsDB`'s "not checked" rows stopped being an argument and became a measurement, on
+  the route's first run.** Eleven tables on the reference server declare no foreign key, two of
+  them `TrickplayInfos` and `MediaSegments` - which on a server that lost 10,997 media items is
+  exactly where orphans would be expected, and which `PRAGMA foreign_key_check` can never reach.
+  Measured directly on `ItemId`: **1,616 of 29,802** trickplay rows and **505 of 16,458** segment
+  rows, neither wholly orphaned, so the column is the right one. The reported total becomes
+  204,927 rows across twelve relations rather than 202,806 across ten.
+- Recorded because the category justified itself by being read rather than by the reasoning
+  offered for it: it did not report a fault, it reported that nobody was looking, and there was
+  something to look at. A route listing only its violations would have shown the same ten lines
+  and said nothing about the two.
+- Documentation only; ships with whatever release comes next.
+
 ### Fixed
 - **`OrphanRowsDB` built the very trap it exists to describe, in its own code.** `TableRows` was
   read with a `TryGetValue` falling back to **0** when a table had no count - and zero is
