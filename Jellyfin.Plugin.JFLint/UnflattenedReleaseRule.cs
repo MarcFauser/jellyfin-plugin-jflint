@@ -79,11 +79,23 @@ internal static class UnflattenedReleaseRule
     /// when single-episode folders happen to be a minority of its children.
     /// </para>
     /// <para>
-    /// A folder <i>above</i> a configured root is not excluded, and that is deliberate rather
-    /// than overlooked: to qualify it would need at least <paramref name="minFolders"/> of its
-    /// own children to hold exactly one episode, and a library root holds far more, so it
-    /// cannot be one of them. If that ever changes it will show up as a finding naming a path
-    /// outside the library, which is recognisable.
+    /// A folder <i>above</i> a configured root is not excluded, and that started as reasoning
+    /// and is now a measurement: to qualify it would need at least
+    /// <paramref name="minFolders"/> of its own children to hold exactly one episode, and a
+    /// library root holds far more. Counted on the reference library by the calling tool -
+    /// <b>0</b> candidates above a configured location and <b>0</b> outside every location,
+    /// with the positive control that a known parent path <i>is</i> recognised as one, which is
+    /// what makes those zeros a finding rather than the absence of a hit. Deliberately not
+    /// guarded against; if it ever occurs it surfaces as a row naming a path outside the
+    /// library, which is recognisable.
+    /// </para>
+    /// <para>
+    /// <b>Only trailing separators are normalised</b> - not case, not relative segments, not
+    /// links. On the reference library the candidate is byte-identical to its entry in
+    /// <c>Locations</c>, so the trim is a no-op there and exists for a configured location
+    /// written with a trailing slash. Anyone reading this as "no normalisation at all" and
+    /// adding case-insensitive comparison would break the pair, because the database half
+    /// compares under SQLite's BINARY collation.
     /// </para>
     /// <para>
     /// <b>Ordinal comparison throughout</b>, because SQLite's default collation is BINARY and
@@ -182,10 +194,20 @@ internal static class UnflattenedReleaseRule
     /// <param name="releases">The releases to order.</param>
     /// <returns>The releases by series, then size, then folder.</returns>
     /// <remarks>
+    /// <para>
     /// Series first because the caller groups by it, size descending within a series because
     /// the list is a worklist, and the folder last as the tiebreaker - it is unique by
     /// construction, one row per parent folder, so the order is total.
-    /// </remarks>
+    /// </para>
+    /// <para>
+    /// <b>The descending count is load-bearing for the caller, which was an accident and is
+    /// now a contract.</b> Its tab collapses a series into one line and takes the path of the
+    /// <i>first</i> row for it; with this order that is the release holding the most
+    /// per-episode folders - the one where the flattening work starts - rather than an
+    /// arbitrary one. Reported back by that session after reading its own <c>Finish()</c>.
+    /// Reordering this looks cosmetic from here and silently degrades their tab, so it is
+    /// written down rather than left to be rediscovered.
+    /// </para></remarks>
     private static List<UnflattenedReleaseDto> Sorted(IEnumerable<UnflattenedReleaseDto> releases)
         => releases
             .OrderBy(release => release.SeriesName is null)

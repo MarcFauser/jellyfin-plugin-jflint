@@ -36,6 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   halves - because "single-episode folders must be the majority of the children" would have
   been cheaper and would have been a guess. This was a defect in the caller's tab before it was
   a question for this route.
+- **Counted against the real library rather than predicted:** 104 configured locations, 216
+  candidates, exactly **1** of them a configured location, **215** after the bar - with the
+  positive control that the comparison does hit a known path, so the 1 is a finding and not a
+  coincidence. Eight of the 104 locations end in `/Series/1080p`, so the bar is not a
+  single-case plaster: it fires again as soon as flattening leaves further single-episode
+  releases directly under a root.
+- **Only trailing separators are normalised** - not case, not relative segments. The candidate
+  is byte-identical to its `Locations` entry on the reference library, so the trim is a no-op
+  there and exists for a location written with a trailing slash. Recorded because reading it as
+  "no normalisation at all" invites adding case-insensitive comparison, which would break the
+  pair: the database half compares under SQLite's BINARY collation.
 
 ### Verified
 - **The threshold is a parameter with a default of 3, and that is the caller's own retraction.**
@@ -64,6 +75,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   reported, five that must stay silent, and three controls. The two that matter are the library
   root refused, and **the same data reported when that root is not configured** - without the
   second one the first would pass with a rule that reports nothing at all.
+- **A guard that was deliberately NOT built, and now has a number instead of an argument.** A
+  folder *above* a configured location is not excluded, on the reasoning that it would need at
+  least `minFolders` of its own children to hold exactly one episode while a library root holds
+  far more. Measured: **0** candidates above a configured location and **0** outside every
+  location, with the positive control that a known parent path is recognised as one. The
+  reasoning was right, and it was still only reasoning until somebody counted.
+- **The descending `FolderCount` in the sort turned out to be load-bearing for the caller**,
+  which nobody intended. Its tab collapses a series into one line and takes the path of the
+  first row, so this order hands it the release where the flattening work starts rather than an
+  arbitrary one. Written into the rule, because reordering it looks cosmetic from this side.
 
 ### Changed
 - **The hollow set cannot be derived, only measured - and the evidence is a wrong prediction made
