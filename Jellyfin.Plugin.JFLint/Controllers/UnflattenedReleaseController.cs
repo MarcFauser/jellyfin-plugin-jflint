@@ -1,0 +1,210 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Net.Mime;
+using System.Threading;
+using System.Threading.Tasks;
+using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations;
+using Jellyfin.Plugin.JFLint.Models;
+using MediaBrowser.Common.Api;
+using MediaBrowser.Controller;
+using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Jellyfin.Plugin.JFLint.Controllers;
+
+/// <summary>
+/// Release folders that give every episode its own directory.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Why it exists: the caller moved 29.8 MB to compute a few hundred rows.</b> The "one
+/// folder per episode" tab has two halves, and only one of them had a route. The other asked
+/// for <c>/Items?Recursive=true&amp;IncludeItemTypes=Episode&amp;Fields=Path</c> and got
+/// 31,655 items back - 33.2, 33.5 and 34.3 seconds over three runs after a warm-up - to
+/// derive 216 release folders from pure path arithmetic. The computation is cheap; the
+/// transfer is the cost.
+/// </para>
+/// <para>
+/// <b>It is not the same question as <c>PerEpisodeFolder</c>, and the difference is which end
+/// it reports.</b> That kind names a <c>Season</c> Jellyfin created whose <i>name</i> looks
+/// like a file name - the child. This one names the <b>release folder holding at least three
+/// of them</b> - the parent - and derives it from episode paths alone, so it holds whether or
+/// not Jellyfin resolved anything. On the reference library that is the whole difference
+/// between the two: the season half reports 0 and this one 215.
+/// </para>
+/// <para>
+/// <b>The pair is a real control here, not two transports of one answer.</b> The database half
+/// reads the raw <c>Path</c> column, the object-model half the materialised property, and those
+/// are not the same string - Jellyfin stores the metadata and data directories as
+/// <c>%MetadataPath%</c> and <c>%AppDataPath%</c>. That substitution is where this plugin's one
+/// released path defect lived, and here it would not merely misprint a path: the grouping is
+/// <i>on</i> the path, so a half that grouped stored spellings would produce different parents.
+/// The database half therefore expands <b>before</b> grouping rather than before reporting.
+/// </para>
+/// <para>
+/// <b>Both halves take the same base population by construction</b>, which is the failure the
+/// caller warned about. Of 31,655 episode items only 26,884 carry a path; the rest are virtual.
+/// If one half filtered on the path and the other did not, they would differ by thousands and
+/// it would read as a defect where only the population differs. Both filter on a non-empty
+/// path explicitly, so the agreement does not depend on <c>GetItemList</c> and a SQL
+/// <c>WHERE</c> happening to exclude the same rows - and they do not: measured on v12,
+/// <c>GetItemList</c> returned 26,151 episodes where HTTP reported 30,921.
+/// </para>
+/// <para>
+/// Requires elevation, like everything else here, because the responses are paths.
+/// </para>
+/// </remarks>
+/// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface, used
+/// by both halves - the object-model half for the episodes, and <b>both</b> for the configured
+/// library locations that can never be a release.</param>
+/// <param name="itemTypeLookup">Instance of the <see cref="IItemTypeLookup"/> interface.</param>
+/// <param name="appHost">Instance of the <see cref="IServerApplicationHost"/> interface, used to
+/// expand the stored form of a path - see <see cref="StoredPath"/>.</param>
+/// <param name="dbContextFactory">Factory for the Jellyfin database context.</param>
+[ApiController]
+[Route("JFLint")]
+[Authorize(Policy = Policies.RequiresElevation)]
+[Produces(MediaTypeNames.Application.Json)]
+public class UnflattenedReleaseController(
+    ILibraryManager libraryManager,
+    IItemTypeLookup itemTypeLookup,
+    IServerApplicationHost appHost,
+    IDbContextFactory<JellyfinDbContext> dbContextFactory) : ControllerBase
+{
+    /// <summary>
+    /// Gets release folders laid out one directory per episode, via
+    /// <see cref="ILibraryManager"/>.
+    /// </summary>
+    /// <param name="minFolders">How many per-episode folders make a release. Defaults to
+    /// <see cref="UnflattenedReleaseRule.DefaultMinFolders"/>.</param>
+    /// <response code="200">Findings returned.</response>
+    /// <response code="400">The threshold is below what the criterion can mean.</response>
+    /// <returns>One row per release folder.</returns>
+    /// <remarks>
+    /// The slow half of the pair, and slow for the same structural reason as every other
+    /// object-model half: it materialises every episode in the library. A caller asks
+    /// <c>UnflattenedReleaseDB</c> first and falls back to this one.
+    /// </remarks>
+    [HttpGet("UnflattenedRelease")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<IReadOnlyList<UnflattenedReleaseDto>> GetUnflattenedReleases(
+        [FromQuery] int minFolders = UnflattenedReleaseRule.DefaultMinFolders)
+    {
+        var refusal = Refuse(minFolders);
+        if (refusal is not null)
+        {
+            return refusal;
+        }
+
+        var episodes = libraryManager.GetItemList(new InternalItemsQuery
+        {
+            IncludeItemTypes = [BaseItemKind.Episode],
+            Recursive = true,
+
+            // Asking for as little as possible, for cost rather than correctness: a default
+            // DtoOptions carries every ItemField and EnableUserData, which adds four collection
+            // Includes to one query. Path and SeriesName are columns on the item itself and
+            // arrive either way.
+            DtoOptions = new DtoOptions(false) { EnableUserData = false }
+        })
+            .Where(item => !string.IsNullOrEmpty(item.Path))
+            .Select(item => (item.Path, (item as Episode)?.SeriesName));
+
+        return Ok(UnflattenedReleaseRule.Evaluate(episodes, LibraryRoots(), minFolders));
+    }
+
+    /// <summary>
+    /// Gets release folders laid out one directory per episode, straight from the database.
+    /// </summary>
+    /// <param name="minFolders">How many per-episode folders make a release. Defaults to
+    /// <see cref="UnflattenedReleaseRule.DefaultMinFolders"/>.</param>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <response code="200">Findings returned.</response>
+    /// <response code="400">The threshold is below what the criterion can mean.</response>
+    /// <returns>One row per release folder.</returns>
+    /// <remarks>
+    /// <para>
+    /// The whole judgement runs in memory on purpose. SQLite has no <c>dirname</c>, so the
+    /// parent of a path is <c>rtrim(Path, replace(replace(Path,'\','/'),'/',''))</c> - which
+    /// works, has to be applied twice, and is unpleasant to read. It would also buy nothing:
+    /// the expensive part is the transfer, and this route returns a few hundred rows either
+    /// way. Grouping 26,884 short strings inside the server process costs nothing worth
+    /// measuring.
+    /// </para>
+    /// <para>
+    /// No <c>LIKE</c> pre-filter either, and that is the more important omission. It would
+    /// have to be applied on this half only, and a filter one half applies and the other does
+    /// not is how a pair stops being a control - which this plugin had already broken once, in
+    /// the database half of <c>FileNameTitle</c>, and caught before shipping.
+    /// </para>
+    /// </remarks>
+    [HttpGet("UnflattenedReleaseDB")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IReadOnlyList<UnflattenedReleaseDto>>> GetUnflattenedReleasesFromDatabaseAsync(
+        [FromQuery] int minFolders = UnflattenedReleaseRule.DefaultMinFolders,
+        CancellationToken cancellationToken = default)
+    {
+        var refusal = Refuse(minFolders);
+        if (refusal is not null)
+        {
+            return refusal;
+        }
+
+        var episodeType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Episode];
+
+        var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using (dbContext.ConfigureAwait(false))
+        {
+            var rows = await dbContext.BaseItems
+                .AsNoTracking()
+                .Where(item => item.Type == episodeType && item.Path != null)
+                .Select(item => new { item.Path, item.SeriesName })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            // Expanded BEFORE the grouping, not before reporting. The grouping is ON the path,
+            // so a stored spelling would produce a different parent rather than a differently
+            // printed one - the pair would disagree about which folders exist.
+            var episodes = rows.Select(row => (StoredPath.Expand(appHost, row.Path)!, row.SeriesName));
+
+            return Ok(UnflattenedReleaseRule.Evaluate(episodes, LibraryRoots(), minFolders));
+        }
+    }
+
+    /// <summary>
+    /// Refuses a threshold that would change the question rather than tighten it.
+    /// </summary>
+    /// <param name="minFolders">The requested threshold.</param>
+    /// <returns>The refusal, or null when the value is usable.</returns>
+    private BadRequestObjectResult? Refuse(int minFolders)
+        => minFolders < UnflattenedReleaseRule.MinimumThreshold
+            ? BadRequest(string.Format(
+                CultureInfo.InvariantCulture,
+                "minFolders must be at least {0}; below that every folder holding a single episode would make its parent a release.",
+                UnflattenedReleaseRule.MinimumThreshold))
+            : null;
+
+    /// <summary>
+    /// Every configured library location.
+    /// </summary>
+    /// <returns>The locations, which can never be a release folder.</returns>
+    /// <remarks>
+    /// Read through <see cref="ILibraryManager"/> by <b>both</b> halves, so the bar is the same
+    /// set on each. Handing the database half a list from the caller instead would have made it
+    /// a parameter the two could disagree about.
+    /// </remarks>
+    private IEnumerable<string> LibraryRoots()
+        => libraryManager.GetVirtualFolders().SelectMany(folder => folder.Locations);
+}
