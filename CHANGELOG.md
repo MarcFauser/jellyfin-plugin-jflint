@@ -7,126 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-- `GET /JFLint/UnflattenedRelease` and `…DB` - release folders that give every episode its own
-  directory, the layout that has to be flattened before Jellyfin can read the season. One row
-  per release folder with the number of per-episode folders it holds.
-- **The occasion is a measurement from the calling tool:** its "one folder per episode" tab had
-  a route for one half only. The other asked for
-  `/Items?Recursive=true&IncludeItemTypes=Episode&Fields=Path` and moved **29.8 MB** in
-  **33.2 / 33.5 / 34.3 s** over three runs to derive **216** release folders from pure path
-  arithmetic.
-- **It is not the same question as `PerEpisodeFolder`, and the difference is which end it
-  reports.** That kind names a `Season` Jellyfin created whose *name* looks like a file name -
-  the child. This one names the release folder holding at least three of them - the parent -
-  and derives it from episode paths alone, so it holds whether or not Jellyfin resolved
-  anything. On the reference library the season half reports 0 and this one 215.
-- Named `UnflattenedRelease` rather than the proposed `PerEpisodeFolder2DB`: a positional name
-  is what the owner's own naming rule exists to prevent. "Season" is deliberately absent too -
-  one of the reference library's releases holds **252** per-episode directories, which is no
-  season, and the criterion does not constrain what the parent is.
-
 ### Fixed
-- **The criterion as proposed matches a configured library ROOT, and the route refuses it.**
-  Measured by the calling tool on the same paths: of 216 releases exactly one holds episodes of
-  several series, and it is `…/Series/1080p` - the library location itself, which qualifies
-  because three single-episode releases sit directly beneath it. The tab would have offered to
-  flatten a whole library. The bar is exact rather than a heuristic - the candidate must not
-  **be** a configured location, read from `ILibraryManager.GetVirtualFolders()` by **both**
-  halves - because "single-episode folders must be the majority of the children" would have
-  been cheaper and would have been a guess. This was a defect in the caller's tab before it was
-  a question for this route.
-- **Counted against the real library rather than predicted:** 104 configured locations, 216
-  candidates, exactly **1** of them a configured location, **215** after the bar - with the
-  positive control that the comparison does hit a known path, so the 1 is a finding and not a
-  coincidence. Eight of the 104 locations end in `/Series/1080p`, so the bar is not a
-  single-case plaster: it fires again as soon as flattening leaves further single-episode
-  releases directly under a root.
-- **Only trailing separators are normalised** - not case, not relative segments. The candidate
-  is byte-identical to its `Locations` entry on the reference library, so the trim is a no-op
-  there and exists for a location written with a trailing slash. Recorded because reading it as
-  "no normalisation at all" invites adding case-insensitive comparison, which would break the
-  pair: the database half compares under SQLite's BINARY collation.
-
-### Verified
-- **The threshold is a parameter with a default of 3, and that is the caller's own retraction.**
-  They expected it to matter and measured otherwise: at three the criterion reports 216, at two
-  221 - five rows. It is a blunt instrument rather than the sensitive knob it looks like.
-  Below two it is refused with 400, because at one every folder holding a single episode would
-  make its parent a release, which is a different question rather than a looser answer.
-- **`FolderCount` is exact, and there is deliberately no second count of episodes.** Measured
-  once the library root is excluded: 3,172 per-episode folders against 3,172 episodes. The two
-  differ only through folders holding more than one episode, which are not per-episode folders
-  and never enter the count. A second field would advertise a distinction that does not exist.
-- **Both halves take the same base population by construction, which is the failure the caller
-  warned about.** Of 31,655 episode items only 26,884 carry a path. Both halves filter on a
-  non-empty path explicitly rather than relying on `GetItemList` and a SQL `WHERE` happening to
-  exclude the same rows - and they do not: on v12 `GetItemList` returned 26,151 episodes where
-  HTTP reported 30,921.
-- **The database half expands the path BEFORE grouping, not before reporting.** The grouping is
-  *on* the path, so a stored `%MetadataPath%` spelling would produce a different parent rather
-  than a differently printed string - the halves would disagree about which folders exist.
-- No `LIKE` pre-filter, and the reason is the pair rather than taste. Measured by the caller:
-  `SxxExx` on the folder name finds 99.1 % with one false positive, but is blind to the class
-  that actually breaks Jellyfin's season detection - a folder named `…E01.…` **without** a
-  season. And it could only be applied on the database half, which is how a pair stops being a
-  control - the same mistake this project caught in `FileNameTitleDB` before shipping.
-- Thirteen vectors against the **built** assembly, in both directions: five that must be
-  reported, five that must stay silent, and three controls. The two that matter are the library
-  root refused, and **the same data reported when that root is not configured** - without the
-  second one the first would pass with a rule that reports nothing at all.
-- **A guard that was deliberately NOT built, and now has a number instead of an argument.** A
-  folder *above* a configured location is not excluded, on the reasoning that it would need at
-  least `minFolders` of its own children to hold exactly one episode while a library root holds
-  far more. Measured: **0** candidates above a configured location and **0** outside every
-  location, with the positive control that a known parent path is recognised as one. The
-  reasoning was right, and it was still only reasoning until somebody counted.
-- **The descending `FolderCount` in the sort turned out to be load-bearing for the caller**,
-  which nobody intended. Its tab collapses a series into one line and takes the path of the
-  first row, so this order hands it the release where the flattening work starts rather than an
-  arbitrary one. Written into the rule, because reordering it looks cosmetic from this side.
-
-### Changed
-- **The hollow set cannot be derived, only measured - and the evidence is a wrong prediction made
-  from this side.** Told that `TableRows` would expose empty relations, this project predicted
-  exactly two on the reference server, reasoning from what its 10,997 missing items would have
-  touched. Measured against 11.27 it is **three**: the extra one is
-  `AccessSchedules.UserId -> Users`, an empty table with nothing whatever to do with the damage.
-  Hollowness is a property of the **table**, not of the fault being looked for, so reasoning
-  about the fault returns the relations one was already thinking about and omits the rest in
-  silence. That is a better argument for the field than "an empty table's zero carries no
-  information", which is what was put to the owner, and it is the caller's formulation rather
-  than this project's.
-- Two further tables read zero rows and stay in "not checked" rather than "hollow" -
-  `DeviceOptions` and `__EFMigrationsLock`, empty **and** unguarded. The ranking handles that
-  because "declares no foreign key" is the stronger statement and sorts first; it was not
-  designed for the case, and saying so is more useful than claiming foresight.
-- **`OrphanRowsDB`'s "not checked" rows stopped being an argument and became a measurement, on
-  the route's first run.** Eleven tables on the reference server declare no foreign key, two of
-  them `TrickplayInfos` and `MediaSegments` - which on a server that lost 10,997 media items is
-  exactly where orphans would be expected, and which `PRAGMA foreign_key_check` can never reach.
-  Measured directly on `ItemId`: **1,616 of 29,802** trickplay rows and **505 of 16,458** segment
-  rows, neither wholly orphaned, so the column is the right one. The reported total becomes
-  204,927 rows across twelve relations rather than 202,806 across ten.
-- Recorded because the category justified itself by being read rather than by the reasoning
-  offered for it: it did not report a fault, it reported that nobody was looking, and there was
-  something to look at. A route listing only its violations would have shown the same ten lines
-  and said nothing about the two.
-- Documentation only; ships with whatever release comes next.
-
-### Fixed
-- **`OrphanRowsDB` built the very trap it exists to describe, in its own code.** `TableRows` was
-  read with a `TryGetValue` falling back to **0** when a table had no count - and zero is
-  precisely the value that means "this table is empty", which the release that added the field
-  argues must never be confused with "clean". A missing count would have rendered as a hollow
-  relation: a finding made entirely of an absent value. Now the indexer, so a broken assumption
-  is a 500 rather than a plausible number.
-- The path is unreachable today - both dictionaries are built from the same `sqlite_master`
-  names in the same context - which is exactly why it should not have been written. A fallback
-  for an impossible case costs nothing until it fires, and then it lies. Found because the
-  calling tool reported the same shape from its own side: reading `TableRows` as a plain `int`
-  against a server still running the previous release would have marked all 28 relations hollow,
-  a spectacular finding made of a missing field.
 - `build.ps1 -Publish` now pushes the source commit **before** creating the releases, so the
   tags land on the commit that built the artifacts. `gh release create` makes the tag on the
   **remote**, at whatever the default branch points at there; it never sees the local HEAD. The
@@ -220,6 +101,127 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   dark dashboard without a background box. Deliberately no new plugin version: the logo
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
+
+## [11.28.0.0] / [12.28.0.0] - 2026-09-16
+
+### Added
+- `GET /JFLint/UnflattenedRelease` and `…DB` - release folders that give every episode its own
+  directory, the layout that has to be flattened before Jellyfin can read the season. One row
+  per release folder with the number of per-episode folders it holds.
+- **The occasion is a measurement from the calling tool:** its "one folder per episode" tab had
+  a route for one half only. The other asked for
+  `/Items?Recursive=true&IncludeItemTypes=Episode&Fields=Path` and moved **29.8 MB** in
+  **33.2 / 33.5 / 34.3 s** over three runs to derive **216** release folders from pure path
+  arithmetic.
+- **It is not the same question as `PerEpisodeFolder`, and the difference is which end it
+  reports.** That kind names a `Season` Jellyfin created whose *name* looks like a file name -
+  the child. This one names the release folder holding at least three of them - the parent -
+  and derives it from episode paths alone, so it holds whether or not Jellyfin resolved
+  anything. On the reference library the season half reports 0 and this one 215.
+- Named `UnflattenedRelease` rather than the proposed `PerEpisodeFolder2DB`: a positional name
+  is what the owner's own naming rule exists to prevent. "Season" is deliberately absent too -
+  one of the reference library's releases holds **252** per-episode directories, which is no
+  season, and the criterion does not constrain what the parent is.
+
+### Fixed
+- **The criterion as proposed matches a configured library ROOT, and the route refuses it.**
+  Measured by the calling tool on the same paths: of 216 releases exactly one holds episodes of
+  several series, and it is `…/Series/1080p` - the library location itself, which qualifies
+  because three single-episode releases sit directly beneath it. The tab would have offered to
+  flatten a whole library. The bar is exact rather than a heuristic - the candidate must not
+  **be** a configured location, read from `ILibraryManager.GetVirtualFolders()` by **both**
+  halves - because "single-episode folders must be the majority of the children" would have
+  been cheaper and would have been a guess. This was a defect in the caller's tab before it was
+  a question for this route.
+- **Counted against the real library rather than predicted:** 104 configured locations, 216
+  candidates, exactly **1** of them a configured location, **215** after the bar - with the
+  positive control that the comparison does hit a known path, so the 1 is a finding and not a
+  coincidence. Eight of the 104 locations end in `/Series/1080p`, so the bar is not a
+  single-case plaster: it fires again as soon as flattening leaves further single-episode
+  releases directly under a root.
+- **Only trailing separators are normalised** - not case, not relative segments. The candidate
+  is byte-identical to its `Locations` entry on the reference library, so the trim is a no-op
+  there and exists for a location written with a trailing slash. Recorded because reading it as
+  "no normalisation at all" invites adding case-insensitive comparison, which would break the
+  pair: the database half compares under SQLite's BINARY collation.
+- **`OrphanRowsDB` built the very trap it exists to describe, in its own code.** `TableRows` was
+  read with a `TryGetValue` falling back to **0** when a table had no count - and zero is
+  precisely the value that means "this table is empty", which the release that added the field
+  argues must never be confused with "clean". A missing count would have rendered as a hollow
+  relation: a finding made entirely of an absent value. Now the indexer, so a broken assumption
+  is a 500 rather than a plausible number.
+- The path is unreachable today - both dictionaries are built from the same `sqlite_master`
+  names in the same context - which is exactly why it should not have been written. A fallback
+  for an impossible case costs nothing until it fires, and then it lies. Found because the
+  calling tool reported the same shape from its own side: reading `TableRows` as a plain `int`
+  against a server still running the previous release would have marked all 28 relations hollow,
+  a spectacular finding made of a missing field.
+
+### Changed
+- **The hollow set cannot be derived, only measured - and the evidence is a wrong prediction made
+  from this side.** Told that `TableRows` would expose empty relations, this project predicted
+  exactly two on the reference server, reasoning from what its 10,997 missing items would have
+  touched. Measured against 11.27 it is **three**: the extra one is
+  `AccessSchedules.UserId -> Users`, an empty table with nothing whatever to do with the damage.
+  Hollowness is a property of the **table**, not of the fault being looked for, so reasoning
+  about the fault returns the relations one was already thinking about and omits the rest in
+  silence. That is a better argument for the field than "an empty table's zero carries no
+  information", which is what was put to the owner, and it is the caller's formulation rather
+  than this project's.
+- Two further tables read zero rows and stay in "not checked" rather than "hollow" -
+  `DeviceOptions` and `__EFMigrationsLock`, empty **and** unguarded. The ranking handles that
+  because "declares no foreign key" is the stronger statement and sorts first; it was not
+  designed for the case, and saying so is more useful than claiming foresight.
+- **`OrphanRowsDB`'s "not checked" rows stopped being an argument and became a measurement, on
+  the route's first run.** Eleven tables on the reference server declare no foreign key, two of
+  them `TrickplayInfos` and `MediaSegments` - which on a server that lost 10,997 media items is
+  exactly where orphans would be expected, and which `PRAGMA foreign_key_check` can never reach.
+  Measured directly on `ItemId`: **1,616 of 29,802** trickplay rows and **505 of 16,458** segment
+  rows, neither wholly orphaned, so the column is the right one. The reported total becomes
+  204,927 rows across twelve relations rather than 202,806 across ten.
+- Recorded because the category justified itself by being read rather than by the reasoning
+  offered for it: it did not report a fault, it reported that nobody was looking, and there was
+  something to look at. A route listing only its violations would have shown the same ten lines
+  and said nothing about the two.
+- Documentation only; ships with whatever release comes next.
+
+### Verified
+- **The threshold is a parameter with a default of 3, and that is the caller's own retraction.**
+  They expected it to matter and measured otherwise: at three the criterion reports 216, at two
+  221 - five rows. It is a blunt instrument rather than the sensitive knob it looks like.
+  Below two it is refused with 400, because at one every folder holding a single episode would
+  make its parent a release, which is a different question rather than a looser answer.
+- **`FolderCount` is exact, and there is deliberately no second count of episodes.** Measured
+  once the library root is excluded: 3,172 per-episode folders against 3,172 episodes. The two
+  differ only through folders holding more than one episode, which are not per-episode folders
+  and never enter the count. A second field would advertise a distinction that does not exist.
+- **Both halves take the same base population by construction, which is the failure the caller
+  warned about.** Of 31,655 episode items only 26,884 carry a path. Both halves filter on a
+  non-empty path explicitly rather than relying on `GetItemList` and a SQL `WHERE` happening to
+  exclude the same rows - and they do not: on v12 `GetItemList` returned 26,151 episodes where
+  HTTP reported 30,921.
+- **The database half expands the path BEFORE grouping, not before reporting.** The grouping is
+  *on* the path, so a stored `%MetadataPath%` spelling would produce a different parent rather
+  than a differently printed string - the halves would disagree about which folders exist.
+- No `LIKE` pre-filter, and the reason is the pair rather than taste. Measured by the caller:
+  `SxxExx` on the folder name finds 99.1 % with one false positive, but is blind to the class
+  that actually breaks Jellyfin's season detection - a folder named `…E01.…` **without** a
+  season. And it could only be applied on the database half, which is how a pair stops being a
+  control - the same mistake this project caught in `FileNameTitleDB` before shipping.
+- Thirteen vectors against the **built** assembly, in both directions: five that must be
+  reported, five that must stay silent, and three controls. The two that matter are the library
+  root refused, and **the same data reported when that root is not configured** - without the
+  second one the first would pass with a rule that reports nothing at all.
+- **A guard that was deliberately NOT built, and now has a number instead of an argument.** A
+  folder *above* a configured location is not excluded, on the reasoning that it would need at
+  least `minFolders` of its own children to hold exactly one episode while a library root holds
+  far more. Measured: **0** candidates above a configured location and **0** outside every
+  location, with the positive control that a known parent path is recognised as one. The
+  reasoning was right, and it was still only reasoning until somebody counted.
+- **The descending `FolderCount` in the sort turned out to be load-bearing for the caller**,
+  which nobody intended. Its tab collapses a series into one line and takes the path of the
+  first row, so this order hands it the release where the flattening work starts rather than an
+  arbitrary one. Written into the rule, because reordering it looks cosmetic from this side.
 
 ## [11.27.0.0] / [12.27.0.0] - 2026-09-15
 
