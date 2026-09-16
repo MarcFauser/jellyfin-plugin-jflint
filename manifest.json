@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.28.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.28.0.0/jellyfin-plugin-jflint_12.28.0.0.zip",
+        "checksum": "e2633c1fae9a0f9597fef1d1a64d37dc",
+        "changelog": "Adds the UnflattenedRelease / UnflattenedReleaseDB pair: release folders that give every episode its own directory, the layout that has to be flattened before Jellyfin can read the season. One row per release folder with the number of per-episode folders it holds. It is not the same question as PerEpisodeFolder, which names a season Jellyfin created whose name looks like a file name - the child; this names the release folder holding at least three of them - the parent - and derives it from episode paths alone, so it holds whether or not Jellyfin resolved anything. A configured library location is refused however well it fits the shape, because three single-episode releases directly beneath one are enough to qualify it and a caller would then be offered a whole library to flatten. The threshold is a parameter defaulting to three and is refused below two, where every folder holding a single episode would make its parent a release. Both halves share one rule, take the same base population by construction, and the database half expands the stored path before grouping rather than before reporting - the grouping is on the path, so a placeholder would produce a different parent and not merely a different string.",
+        "timestamp": "2026-09-16T21:42:24Z"
+      },
+      {
         "version": "12.27.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.27.0.0/jellyfin-plugin-jflint_12.27.0.0.zip",
@@ -262,6 +270,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.28.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.28.0.0/jellyfin-plugin-jflint_11.28.0.0.zip",
+        "checksum": "c95fe706da4572505806a16fc46f125c",
+        "changelog": "Adds the UnflattenedRelease / UnflattenedReleaseDB pair: release folders that give every episode its own directory, the layout that has to be flattened before Jellyfin can read the season. One row per release folder with the number of per-episode folders it holds. It is not the same question as PerEpisodeFolder, which names a season Jellyfin created whose name looks like a file name - the child; this names the release folder holding at least three of them - the parent - and derives it from episode paths alone, so it holds whether or not Jellyfin resolved anything. A configured library location is refused however well it fits the shape, because three single-episode releases directly beneath one are enough to qualify it and a caller would then be offered a whole library to flatten. The threshold is a parameter defaulting to three and is refused below two, where every folder holding a single episode would make its parent a release. Both halves share one rule, take the same base population by construction, and the database half expands the stored path before grouping rather than before reporting - the grouping is on the path, so a placeholder would produce a different parent and not merely a different string.",
+        "timestamp": "2026-09-16T21:42:24Z"
       },
       {
         "version": "11.27.0.0",
