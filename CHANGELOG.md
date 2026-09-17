@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **`DescendantsDB` and `ItemsByPathDB` are complementary, and neither is a superset of the
+  other** - measured at acceptance on `Buck.Rogers.S02…-EXCiTED`, and now written into
+  `DescendantWalk`'s remarks rather than left to be rediscovered. The walk found two pathless
+  `Season` rows that the path query structurally cannot see (`Path != null`); the path query
+  found a `Video` - `backdrops/theme-youtube-search.webm` - that the walk does not reach, because
+  a theme hangs off `OwnerId` rather than `ParentId`. A caller that needs "everything under this
+  directory" wants both routes.
+- The same limit applies to `DeleteItemKeepFile`'s refusal, which walks that code: **an owned row
+  inside a folder is not counted as a child.** Not a regression - the guard this replaced walked
+  `Folder.Children`, which is the same `ParentId` edge, so the owner edge was never covered by
+  either implementation; what changed is that there is now a second instrument, which is the only
+  reason it became visible. Following `OwnerId` too would need its own version branch (`string?`
+  on 10.11, `Guid?` on v12, the same shift `PrimaryVersionId` made) and is **not** built, because
+  whether it can bite is unmeasured: it needs a folder whose *only* remaining child is owned by
+  it, and nobody has counted whether such a row exists.
 - **`MediaInfoDB`'s remarks told a caller to cross-check it with `Fields=MediaStreams`, and on
   Jellyfin 12 that stopped being a cross-check.** The route reads `dbContext.BaseItems` raw and
   emits one row per item id, alternate versions included; `Fields=MediaStreams` goes through

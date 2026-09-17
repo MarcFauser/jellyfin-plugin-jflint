@@ -60,6 +60,25 @@ internal static class DescendantWalk
     /// nullable column as a plain <c>IN</c>. With a <c>List&lt;Guid&gt;</c> the comparison needs
     /// <c>ParentId.Value</c>, which is the shape EF is least reliable about translating.
     /// </para>
+    /// <para>
+    /// <b>It follows <c>ParentId</c> and only <c>ParentId</c>, so an OWNED row inside the same
+    /// folder is not a descendant here.</b> Measured on a release of this library: the walk
+    /// found two pathless <c>Season</c> rows that <c>ItemsByPathDB</c> structurally cannot see,
+    /// and <c>ItemsByPathDB</c> found a <c>Video</c> - <c>backdrops/theme-youtube-search.webm</c>
+    /// - that the walk does not reach, because a theme hangs off <c>OwnerId</c> rather than
+    /// <c>ParentId</c>. <b>Neither route is a superset of the other</b>, and a caller that needs
+    /// "everything under this directory" wants both.
+    /// </para>
+    /// <para>
+    /// <b>Not a regression, and not silently accepted either.</b> The guard this replaced walked
+    /// <c>Folder.Children</c>, which is the same <c>ParentId</c> edge, so the owner edge was
+    /// never covered by either implementation - what changed is that there is now a second
+    /// instrument, which is why it became visible at all. Following <c>OwnerId</c> as well would
+    /// need its own version branch (<c>string?</c> on 10.11, <c>Guid?</c> on v12, the same shift
+    /// <c>PrimaryVersionId</c> made) and has not been built, because whether it can bite is
+    /// unmeasured: it needs a folder whose <i>only</i> remaining child is owned by it, and
+    /// nobody has counted whether such a row exists. Written down rather than assumed away.
+    /// </para>
     /// </remarks>
     public static async Task<IReadOnlyList<(Guid Id, string Type, string? Name, string? Path)>> FromDatabaseAsync(
         JellyfinDbContext dbContext,
