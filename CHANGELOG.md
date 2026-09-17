@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **`MediaInfoDB`'s remarks told a caller to cross-check it with `Fields=MediaStreams`, and on
+  Jellyfin 12 that stopped being a cross-check.** The route reads `dbContext.BaseItems` raw and
+  emits one row per item id, alternate versions included; `Fields=MediaStreams` goes through
+  `BaseItemRepository.TranslateQuery`, which appends
+  `PrimaryVersionId == null && (OwnerId == null || ExtraType != null)` and folds those files into
+  the primary's `MediaSources`. The two disagree **by construction** on the v12 line, and neither
+  is wrong. Measured: 23 episode rows on the reference library carry such a link, so a residue of
+  that order is expected rather than alarming.
+- Deliberately **not** a reason to filter here. One row per file is the right shape for a route
+  about video properties - a stacked file has its own codec, resolution and colour metadata - and
+  hiding a file is precisely how this route's 1118-row `DOVIInvalid` defect stayed invisible.
+  What the change costs is the oracle, not the answer: this route has no twin by design, its one
+  remaining cross-check now needs a correction applied before the numbers can be compared, and a
+  standing unexplained residue is what would hide the next real defect.
+- Documentation only, so **no version bump**: the entry sits here rather than under a release
+  because XML doc comments never reach the ZIP, which carries the assembly and `meta.json` alone.
+  The published 11.30.0.0 artifacts are unaffected.
 - `build.ps1 -Publish` now pushes the source commit **before** creating the releases, so the
   tags land on the commit that built the artifacts. `gh release create` makes the tag on the
   **remote**, at whatever the default branch points at there; it never sees the local HEAD. The

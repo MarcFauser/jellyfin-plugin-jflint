@@ -79,6 +79,24 @@ public class MediaInfoController(
     /// the same <c>GetVideoColorRange()</c>: a second transport of one derivation is not a
     /// second opinion about it. A caller falls back to <c>Fields=MediaStreams</c> instead.
     /// </para>
+    /// <para>
+    /// <b>That fallback stopped being a clean cross-check on Jellyfin 12, and the sentence above
+    /// is left standing rather than edited away.</b> This query reads
+    /// <c>dbContext.BaseItems</c> raw and emits one row per item id, alternate versions
+    /// included; <c>Fields=MediaStreams</c> goes through <c>BaseItemRepository.TranslateQuery</c>,
+    /// which appends <c>PrimaryVersionId == null &amp;&amp; (OwnerId == null || ExtraType != null)</c>
+    /// and folds those files into the primary's <c>MediaSources</c>. So on the v12 line the two
+    /// disagree <b>by construction</b>, and the difference is not a defect in either.
+    /// </para>
+    /// <para>
+    /// This is not an argument for filtering here. One row per file is the right shape for a
+    /// route about video properties - a stacked file has its own codec, resolution and colour
+    /// metadata, and hiding it is how the 1118-row defect above stayed invisible. Measured on
+    /// the reference library: 23 episode rows carry an alternate-version link, so a residue of
+    /// that order is expected rather than alarming. What it costs is the oracle: this route's
+    /// only cross-check now needs its own correction applied before the numbers can be compared,
+    /// and a standing unexplained residue is exactly what would hide the next real defect.
+    /// </para>
     /// </remarks>
     /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
     /// <response code="200">Video properties returned.</response>
