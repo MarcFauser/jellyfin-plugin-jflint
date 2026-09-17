@@ -225,10 +225,11 @@ public class ItemRemovalController(
     /// what a sweep of the sixteen pairs had left out, not by the sweep.
     /// </para>
     /// <para>
-    /// Walked one level at a time rather than as a recursive CTE, because EF Core cannot express
-    /// one and the depth here is a season or two. <c>seen</c> is what terminates the loop, so a
-    /// cycle in <c>ParentId</c> - which would itself be a defect - costs one extra round trip
-    /// instead of hanging; no depth cap is needed on top of it.
+    /// <b>The walk itself is shared with the <c>DescendantsDB</c> route</b>, see
+    /// <see cref="DescendantWalk"/>. A caller is expected to ask that route before triggering
+    /// this one, and it is only protected if both count the same rows - two hand-written walks
+    /// would be two chances to answer differently, and the disagreement would surface as a
+    /// delete refused after a check said it would not be, or worse the other way round.
     /// </para>
     /// <para>
     /// <b>Only folders are asked.</b> A row pointing its <c>ParentId</c> at a non-folder would
@@ -249,41 +250,22 @@ public class ItemRemovalController(
             kindOf[pair.Value] = pair.Key.ToString();
         }
 
-        var found = new List<BlockingChildDto>();
-        var seen = new HashSet<Guid> { id };
-        var frontier = new List<Guid?> { id };
-
         var dbContext = await dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
         await using (dbContext.ConfigureAwait(false))
         {
-            while (frontier.Count > 0)
+            var rows = await DescendantWalk.FromDatabaseAsync(dbContext, id, default).ConfigureAwait(false);
+
+            var found = new List<BlockingChildDto>(rows.Count);
+            foreach (var row in rows)
             {
-                var parents = frontier;
-                var rows = await dbContext.BaseItems
-                    .AsNoTracking()
-                    .Where(row => parents.Contains(row.ParentId))
-                    .Select(row => new { row.Id, row.Type, row.Name, row.Path })
-                    .ToListAsync()
-                    .ConfigureAwait(false);
-
-                frontier = new List<Guid?>();
-                foreach (var row in rows)
-                {
-                    if (!seen.Add(row.Id))
-                    {
-                        continue;
-                    }
-
-                    found.Add(new BlockingChildDto(
-                        row.Id,
-                        kindOf.TryGetValue(row.Type, out var kind) ? kind : row.Type,
-                        row.Name,
-                        StoredPath.Expand(appHost, row.Path)));
-                    frontier.Add(row.Id);
-                }
+                found.Add(new BlockingChildDto(
+                    row.Id,
+                    kindOf.TryGetValue(row.Type, out var kind) ? kind : row.Type,
+                    row.Name,
+                    StoredPath.Expand(appHost, row.Path)));
             }
-        }
 
-        return found;
+            return found;
+        }
     }
 }

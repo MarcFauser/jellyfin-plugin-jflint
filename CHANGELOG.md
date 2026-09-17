@@ -119,6 +119,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.31.0.0] / [12.31.0.0] - 2026-09-17
+
+### Added
+- `GET /JFLint/DescendantsDB/{itemId}` - every row hanging beneath an item, walked over
+  `ParentId` in the database. One row per descendant; the item itself is never included.
+- **The occasion is a guard in a neighbouring tool that counts the wrong way round.** It asks
+  `GET /Items?Recursive=true&ParentId=<series>` for how many descendants of a series sit outside
+  a target folder and refuses the series when the answer is not zero. That query runs through
+  `BaseItemRepository.TranslateQuery`, which appends
+  `PrimaryVersionId == null && (OwnerId == null || ExtraType != null)`, so the count is
+  systematically **too small** - and too small does not make the guard refuse too often, it makes
+  it fail to refuse. A zero from the filtered query is equally consistent with "nothing outside"
+  and with "only hidden rows outside".
+- **No twin, and here the exemption is the point rather than a compromise.** Every other query
+  exists twice so each half checks the other; the object-model half of this one would be exactly
+  the filtered query above - the defect, not a control. A pair whose second half is known to be
+  wrong does not detect drift, it manufactures it.
+- The cross-check is structural instead: `DeleteItemKeepFile`'s refusal now walks the **same**
+  `DescendantWalk`. A caller asks this route, acts on the answer, and the guard on the other end
+  counts the same rows by construction rather than by agreement - two hand-written walks would
+  have been two chances to answer differently, and the disagreement would surface as a delete
+  refused after a check said it would not be, or worse the other way round.
+- Requested by that session with its measurement attached, and deliberately **not** built on its
+  say-so: a peer session cannot authorise a new public route. It was put to the owner and built
+  after he agreed.
+
 ## [11.30.0.0] / [12.30.0.0] - 2026-09-17
 
 ### Fixed

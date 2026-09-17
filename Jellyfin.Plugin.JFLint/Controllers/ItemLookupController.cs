@@ -269,6 +269,76 @@ public class ItemLookupController(
     }
 
     /// <summary>
+    /// Gets every row hanging beneath an item, straight from the database.
+    /// </summary>
+    /// <param name="itemId">The id of the item to walk beneath.</param>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <response code="200">The descendants, empty when there are none.</response>
+    /// <response code="400">The id is not a usable item id.</response>
+    /// <returns>One row per descendant. The item itself is never included.</returns>
+    /// <remarks>
+    /// <para>
+    /// <b>This route exists because the obvious way to ask is filtered on Jellyfin 12.</b>
+    /// <c>GET /Items?Recursive=true&amp;ParentId=…</c> runs through
+    /// <c>BaseItemRepository.TranslateQuery</c>, which appends
+    /// <c>PrimaryVersionId == null &amp;&amp; (OwnerId == null || ExtraType != null)</c> unless the
+    /// query sets <c>OwnerIds</c>, <c>ExtraTypes</c> or <c>IncludeOwnedItems</c>. So it omits
+    /// alternate versions and owned non-extra rows, and a count taken from it is systematically
+    /// <b>too small</b>.
+    /// </para>
+    /// <para>
+    /// <b>Too small is the dangerous direction for the caller that asked for this.</b> Its guard
+    /// counts how many descendants of a series sit outside a target folder and refuses the
+    /// series when the answer is not zero; an undercount does not make it refuse too often, it
+    /// makes it fail to refuse. A zero from the filtered query is equally consistent with
+    /// "nothing outside" and with "only hidden rows outside", and those are not the same answer.
+    /// </para>
+    /// <para>
+    /// <b>No twin, and here the exemption is not a compromise but the whole point.</b> Every
+    /// other query in this plugin exists twice so each half checks the other. The object-model
+    /// half of this one would be exactly the filtered query above - the defect, not a control.
+    /// A pair whose second half is known to be wrong does not detect drift, it manufactures it.
+    /// The cross-check is instead that <c>DeleteItemKeepFile</c>'s refusal walks the same
+    /// <see cref="DescendantWalk"/>: ask this route, act on the answer, and the guard on the
+    /// other end counts the same rows by construction rather than by agreement.
+    /// </para>
+    /// <para>
+    /// The id is taken as a string and parsed here, for the same reason
+    /// <c>DeleteItemKeepFile</c> does it: a <c>:guid</c> route constraint turns a malformed id
+    /// into a 404, and 404 has to keep meaning "the plugin is not installed".
+    /// </para>
+    /// </remarks>
+    [HttpGet("DescendantsDB/{itemId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<IReadOnlyList<PathItemDto>>> GetDescendantsFromDatabaseAsync(
+        string itemId,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(itemId, out var id) || id.Equals(Guid.Empty))
+        {
+            return BadRequest("itemId must be a non-empty GUID.");
+        }
+
+        var shortNames = ShortTypeNames();
+
+        var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using (dbContext.ConfigureAwait(false))
+        {
+            var rows = await DescendantWalk.FromDatabaseAsync(dbContext, id, cancellationToken).ConfigureAwait(false);
+
+            // Falling back to the raw type name rather than to a placeholder: unlike ItemsByPathDB
+            // this walk is not restricted to the known types, so a row of some other kind can
+            // arrive - and a descendant the caller cannot name is worse than an ugly label.
+            return Ok(Sorted(rows.Select(row => new PathItemDto(
+                row.Id,
+                shortNames.TryGetValue(row.Type, out var name) ? name : row.Type,
+                row.Name,
+                StoredPath.Expand(appHost, row.Path)))));
+        }
+    }
+
+    /// <summary>
     /// Trims a trailing separator and refuses anything that leaves nothing behind. A bare
     /// root would match the whole library, which is never what a lookup means.
     /// </summary>
