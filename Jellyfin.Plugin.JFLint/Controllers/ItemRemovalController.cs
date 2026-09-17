@@ -1,15 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Mime;
 using System.Threading.Tasks;
+using Jellyfin.Database.Implementations;
 using Jellyfin.Plugin.JFLint.Models;
 using MediaBrowser.Common.Api;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
+using MediaBrowser.Controller.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Jellyfin.Plugin.JFLint.Controllers;
 
@@ -36,13 +41,23 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// </remarks>
 /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
 /// <param name="authorizationContext">Instance of the <see cref="IAuthorizationContext"/> interface.</param>
+/// <param name="itemTypeLookup">Instance of the <see cref="IItemTypeLookup"/> interface, used to
+/// name a blocking row's kind without hardcoding a stored type name.</param>
+/// <param name="appHost">Instance of the <see cref="IServerApplicationHost"/> interface, used to
+/// expand the stored form of a path - see <see cref="StoredPath"/>.</param>
+/// <param name="dbContextFactory">Factory for the Jellyfin database context. The refusal counts
+/// descendants here rather than through the object model; see <see cref="DescendantsAsync"/> for
+/// what that cost before it did.</param>
 [ApiController]
 [Route("JFLint")]
 [Authorize(Policy = Policies.RequiresElevation)]
 [Produces(MediaTypeNames.Application.Json)]
 public class ItemRemovalController(
     ILibraryManager libraryManager,
-    IAuthorizationContext authorizationContext) : ControllerBase
+    IAuthorizationContext authorizationContext,
+    IItemTypeLookup itemTypeLookup,
+    IServerApplicationHost appHost,
+    IDbContextFactory<JellyfinDbContext> dbContextFactory) : ControllerBase
 {
     // Enough to identify what is in the way without turning a refusal into a data dump.
     // The count in the response stays exact however many are listed.
@@ -110,12 +125,12 @@ public class ItemRemovalController(
             return Unauthorized("Unauthorized access");
         }
 
-        if (item is Folder folder)
+        if (item is Folder)
         {
             // The refusal names its blockers rather than only counting them. A caller that
             // is told "1 descendant" and can find none over HTTP has nowhere to go; one
             // that is told which id, type and path is in the way can act or report it.
-            var children = folder.GetRecursiveChildren(false);
+            var children = await DescendantsAsync(id).ConfigureAwait(false);
             if (children.Count > 0)
             {
                 var sample = new List<BlockingChildDto>(Math.Min(children.Count, BlockingChildSampleSize));
@@ -126,11 +141,7 @@ public class ItemRemovalController(
                         break;
                     }
 
-                    sample.Add(new BlockingChildDto(
-                        child.Id,
-                        child.GetBaseItemKind().ToString(),
-                        child.Name,
-                        child.Path));
+                    sample.Add(child);
                 }
 
                 return Conflict(new DeleteConflictDto(children.Count, sample));
@@ -173,5 +184,106 @@ public class ItemRemovalController(
         FolderChildrenCache.DetachAggregateRoot(libraryManager);
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Every row still hanging beneath an item, read from the database rather than the object
+    /// model.
+    /// </summary>
+    /// <param name="id">The item about to be deleted.</param>
+    /// <returns>One entry per descendant row, empty when there is none.</returns>
+    /// <remarks>
+    /// <para>
+    /// <b>This used to be <c>folder.GetRecursiveChildren(false)</c>, and on Jellyfin 12 that
+    /// guard was blind.</b> The chain is <c>GetRecursiveChildren</c> -&gt; <c>Children</c> -&gt;
+    /// <c>LoadChildren</c> -&gt; <c>GetCachedChildren()</c>, and the last one issues
+    /// <c>ItemRepository.GetItemList(new InternalItemsQuery { Parent = this, … })</c>. That
+    /// query sets no <c>OwnerIds</c>, no <c>ExtraTypes</c> and no <c>IncludeOwnedItems</c>, so
+    /// <c>BaseItemRepository.TranslateQuery</c> appends
+    /// <c>PrimaryVersionId == null &amp;&amp; (OwnerId == null || ExtraType != null)</c> to it -
+    /// and the guard therefore could not see alternate-version rows or owned non-extra rows.
+    /// </para>
+    /// <para>
+    /// <b>The guard was complete on 10.11 and narrowed silently at the version bump.</b>
+    /// Measured across both shipped trees: <c>PrimaryVersionId == null</c> occurs <b>0</b> times
+    /// in 10.11 and <b>7</b> in v12, the positive control being that the 10.11 tree mentions the
+    /// column in 31 files, so the search was not blind there.
+    /// </para>
+    /// <para>
+    /// <b>What it cost, measured live rather than argued.</b> On a release holding one episode
+    /// as two stacked files, <c>ItemsByPathDB</c> reported the folder plus
+    /// <c>…teil-1-720p.mkv</c> and <c>…teil-2-720p.mkv</c> while <c>ItemsByPath</c> reported the
+    /// folder and <c>teil-1</c> alone. Delete the visible half, ask to delete the folder, and
+    /// the old guard counted zero children: the folder went, the second row stayed behind with a
+    /// dangling <c>ParentId</c> - which is the exact damage <c>OrphanedItem</c> and
+    /// <c>OrphanRowsDB</c> exist to report, caused by the route meant to prevent it.
+    /// </para>
+    /// <para>
+    /// <b>No pair could ever have caught this.</b> This route has no twin, and it is the only
+    /// place in the plugin that reaches <c>BaseItems</c> through neither
+    /// <c>dbContext.BaseItems</c> nor <c>ILibraryManager.GetItemList</c>. It was found by asking
+    /// what a sweep of the sixteen pairs had left out, not by the sweep.
+    /// </para>
+    /// <para>
+    /// Walked one level at a time rather than as a recursive CTE, because EF Core cannot express
+    /// one and the depth here is a season or two. <c>seen</c> is what terminates the loop, so a
+    /// cycle in <c>ParentId</c> - which would itself be a defect - costs one extra round trip
+    /// instead of hanging; no depth cap is needed on top of it.
+    /// </para>
+    /// <para>
+    /// <b>Only folders are asked.</b> A row pointing its <c>ParentId</c> at a non-folder would
+    /// be orphaned by this route just as silently, and that case is deliberately left alone
+    /// rather than fixed in passing: it is a different defect, nobody has measured that it
+    /// occurs, and widening a delete guard is not a change to make on the way past.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<BlockingChildDto>> DescendantsAsync(Guid id)
+    {
+        // Reversed once per call, not per row: BaseItemKindNames maps kind -> stored type name
+        // and the rows carry the stored name. Falling back to the raw value rather than to a
+        // placeholder - an unknown type name is worth seeing verbatim, and a blocker the caller
+        // cannot name is worse than an ugly one.
+        var kindOf = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in itemTypeLookup.BaseItemKindNames)
+        {
+            kindOf[pair.Value] = pair.Key.ToString();
+        }
+
+        var found = new List<BlockingChildDto>();
+        var seen = new HashSet<Guid> { id };
+        var frontier = new List<Guid?> { id };
+
+        var dbContext = await dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using (dbContext.ConfigureAwait(false))
+        {
+            while (frontier.Count > 0)
+            {
+                var parents = frontier;
+                var rows = await dbContext.BaseItems
+                    .AsNoTracking()
+                    .Where(row => parents.Contains(row.ParentId))
+                    .Select(row => new { row.Id, row.Type, row.Name, row.Path })
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+
+                frontier = new List<Guid?>();
+                foreach (var row in rows)
+                {
+                    if (!seen.Add(row.Id))
+                    {
+                        continue;
+                    }
+
+                    found.Add(new BlockingChildDto(
+                        row.Id,
+                        kindOf.TryGetValue(row.Type, out var kind) ? kind : row.Type,
+                        row.Name,
+                        StoredPath.Expand(appHost, row.Path)));
+                    frontier.Add(row.Id);
+                }
+            }
+        }
+
+        return found;
     }
 }

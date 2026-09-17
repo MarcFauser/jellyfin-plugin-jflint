@@ -174,10 +174,27 @@ public class UnflattenedReleaseController(
     /// <c>OwnerId</c> branch measures zero on this library - had an owned non-extra episode with
     /// a path existed, this half would have reported a folder the other half does not, and the
     /// set comparison above would have shown it. Copying a condition that has never had an effect
-    /// would be a guess dressed as symmetry; if one ever appears, the pair reports it. On the
-    /// 10.11 line there is no such filter in the repository at all and no episode carries a
-    /// <c>PrimaryVersionId</c> - episode merging arrived with v12 - so this line is a no-op
-    /// there rather than a divergence.
+    /// would be a guess dressed as symmetry; if one ever appears, the pair reports it.
+    /// </para>
+    /// <para>
+    /// <b>On the 10.11 line the filter is a no-op, and the reason first written here was
+    /// wrong.</b> It said "episode merging arrived with v12", which is true of <i>automatic</i>
+    /// merging only: 10.11's <c>POST /Videos/MergeVersions</c> takes <c>.OfType&lt;Video&gt;()</c>
+    /// and <c>Episode : Video</c>, so merging episodes by hand has always been possible. What
+    /// really differs is the read side - measured across both shipped trees, <c>PrimaryVersionId
+    /// == null</c> appears <b>0</b> times in 10.11 and <b>7</b> in v12, with the positive control
+    /// that the 10.11 tree mentions the column in 31 files, so the search was not simply blind
+    /// there.
+    /// </para>
+    /// <para>
+    /// So on 10.11 <i>neither</i> half filters, and this line is a no-op exactly as long as
+    /// nobody has merged episodes by hand. If someone has, this half reports <i>fewer</i>
+    /// per-episode folders than its twin - the same disagreement that prompted the filter, with
+    /// the signs swapped. Left unconditional rather than branched on the target framework: this
+    /// library's owner never merges versions at all, by standing policy, and the case would
+    /// surface as a handful of rows on the one route built to be read against its twin. A
+    /// <c>#if</c> would buy exactness on a line where the case requires a deliberate act nobody
+    /// here performs, at the price of the first version branch in this file.
     /// </para>
     /// </remarks>
     [HttpGet("UnflattenedReleaseDB")]

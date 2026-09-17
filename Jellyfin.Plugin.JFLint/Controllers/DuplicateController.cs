@@ -65,6 +65,43 @@ public class DuplicateController(
     /// </summary>
     /// <response code="200">Findings returned, one row per file.</response>
     /// <returns>The files sharing a season and episode number within one series.</returns>
+    /// <remarks>
+    /// <para>
+    /// <b><c>IncludeOwnedItems</c> is set to make this half see what the database half always
+    /// saw.</b> Jellyfin 12 merges alternate versions of an episode by itself, and
+    /// <c>BaseItemRepository.TranslateQuery</c> then hides those rows from every object-model
+    /// query - unless one of <c>OwnerIds</c>, <c>ExtraTypes</c> or this flag is set. Measured
+    /// before the flag: 605 rows here against 647 from the database half, and applying
+    /// Jellyfin's own predicate to the database payload reproduced the 605 <b>id for id</b> -
+    /// 23 alternate-version rows dropped outright, plus 19 genuine primaries whose group fell to
+    /// a single member once their only partner was hidden and so stopped being a duplicate at
+    /// all.
+    /// </para>
+    /// <para>
+    /// <b>Enriched rather than filtered, and that is the whole decision.</b> The other way to
+    /// end the disagreement was to mirror the filter in the database half, the way
+    /// <c>UnflattenedReleaseDB</c> does - and it would have been backwards here. That route
+    /// counts <i>episodes</i>, so raw rows made it count files; this one counts <b>files</b>
+    /// sharing a number, which is what its summary, its DTO and its per-file shape all say.
+    /// An alternate version is such a file. Filtering would have hidden 42 rows including four
+    /// Remington Steele seasons and JAG, where Jellyfin merged genuinely different specials
+    /// because they all parse as episode 0 - the exact finding this route exists to surface.
+    /// </para>
+    /// <para>
+    /// <b>The flag is all-or-nothing, which is why it is worth naming what else it lets in.</b>
+    /// It skips the whole clause, so owned non-extra rows arrive too, not only alternate
+    /// versions. That is the population Jellyfin itself describes as "items with OwnerId but no
+    /// ExtraType might be alternate versions, not extras" - the same kind of row, reached by the
+    /// other half of the same predicate. A row that is a second file covering an episode number
+    /// belongs in this answer however it came to be hidden.
+    /// </para>
+    /// <para>
+    /// <b>Version-branched because 10.11 has no such property</b> - measured, <c>IIQ</c> carries
+    /// it on the v12 line only, 1 occurrence against 0, with 145 properties against 135 as the
+    /// control that both files were read. It needs no branch in behaviour: 10.11's repository
+    /// has no such filter at all, so that line's two halves already agree.
+    /// </para>
+    /// </remarks>
     [HttpGet("DuplicateEpisode")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyList<DuplicateEpisodeDto>> GetDuplicateEpisodes()
@@ -73,7 +110,10 @@ public class DuplicateController(
         {
             IncludeItemTypes = [BaseItemKind.Episode],
             Recursive = true,
-            IsVirtualItem = false
+            IsVirtualItem = false,
+#if NET10_0_OR_GREATER
+            IncludeOwnedItems = true
+#endif
         }).OfType<Episode>();
 
         var rows = new List<DuplicateEpisodeDto>();

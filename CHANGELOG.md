@@ -102,6 +102,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.30.0.0] / [12.30.0.0] - 2026-09-17
+
+### Fixed
+- **`DeleteItemKeepFile`'s 409 guard could not see all of a folder's children on Jellyfin 12,
+  so the route meant to prevent orphan rows could create one.** It counted descendants with
+  `folder.GetRecursiveChildren(false)`, and that resolves through `Children` → `LoadChildren` →
+  `GetCachedChildren()` → `ItemRepository.GetItemList(new InternalItemsQuery { Parent = this, … })`.
+  That query sets no `OwnerIds`, no `ExtraTypes` and no `IncludeOwnedItems`, so
+  `BaseItemRepository.TranslateQuery` appends
+  `PrimaryVersionId == null && (OwnerId == null || ExtraType != null)` to it. The guard now
+  walks `ParentId` in the database instead, one level at a time.
+- **The guard was complete on 10.11 and narrowed silently at the version bump.** Measured across
+  both shipped trees: `PrimaryVersionId == null` occurs **0** times in 10.11 and **7** in v12,
+  the positive control being that the 10.11 tree mentions the column in 31 files, so the search
+  was not blind there.
+- Measured live rather than argued, and without deleting anything: on a release holding one
+  episode as two stacked files, `ItemsByPathDB` reported the folder plus `…teil-1-720p.mkv` and
+  `…teil-2-720p.mkv` while `ItemsByPath` reported the folder and `teil-1` alone. Delete the
+  visible half, ask to delete the folder, and the old guard counted zero children - the folder
+  went and the second row stayed behind with a dangling `ParentId`, which is exactly the damage
+  `OrphanedItem` and `OrphanRowsDB` exist to report.
+- **No pair comparison could ever have caught this.** The route has no twin, and it is the only
+  place in the plugin that reaches `BaseItems` through neither `dbContext.BaseItems` nor
+  `ILibraryManager.GetItemList`. A sweep of all sixteen pairs reported it nowhere; it was found
+  by asking what the sweep had left out.
+- The walk is level-by-level because EF Core cannot express a recursive CTE, and the depth here
+  is a season or two. `seen` is what terminates it, so a cycle in `ParentId` - itself a defect -
+  costs one extra round trip rather than hanging. Only folders are asked, as before: a row
+  pointing its `ParentId` at a non-folder would be orphaned just as silently, and that case is
+  left alone rather than fixed in passing.
+
+### Changed
+- **`DuplicateEpisode` sets `IncludeOwnedItems`, so both halves of the pair answer the same
+  number again.** Measured before: 605 rows through `ILibraryManager` against 647 from the
+  database. Applying Jellyfin's own predicate to the database payload reproduced the 605 **id
+  for id** - 23 alternate-version rows dropped outright, plus 19 genuine primaries whose group
+  fell to a single member once their only partner was hidden and so stopped being a duplicate.
+- **Enriched rather than filtered, which is the opposite of what 11.29.0.0 did to
+  `UnflattenedReleaseDB`, and deliberately so.** That route counts *episodes*, so raw rows made
+  it count files. This one counts **files** sharing a number - its summary, its DTO and its
+  per-file shape all say so - and an alternate version is such a file. Mirroring the filter here
+  would have hidden 42 rows including four Remington Steele seasons and JAG, where Jellyfin
+  merged genuinely different specials because they all parse as episode 0: the exact finding the
+  route exists to surface.
+- The flag is all-or-nothing and lets owned non-extra rows in as well, not only alternate
+  versions. That is the population Jellyfin itself describes as "items with OwnerId but no
+  ExtraType might be alternate versions, not extras" - the same kind of row through the other
+  half of the same predicate, and it belongs in this answer however it came to be hidden.
+- Version-branched on `NET10_0_OR_GREATER` because 10.11's `InternalItemsQuery` has no such
+  property - measured, 1 occurrence against 0, with 145 properties against 135 as the control
+  that both files were read. The guard was then **broken on purpose** to prove it is not inert:
+  with a misspelt property inside the block, `net9.0` still builds and `net10.0` fails, so the
+  line really is in the v12 assembly and really is absent from the other.
+- `DuplicateEpisodeDto.PrimaryVersionId` no longer documents a link as "a settled decision
+  rather than an open one". That held on 10.11, where only `POST /Videos/MergeVersions` ever set
+  the column. On v12 Jellyfin merges by itself and nobody decided anything - of 23 linked rows
+  on the reference library, every one was made automatically. Reading a link as "already
+  handled" throws away precisely the rows worth looking at.
+
+### Verified
+- All sixteen route pairs were held against each other whole-row - each row canonicalised to
+  property-sorted JSON, the two multisets compared - with a planted edit as the control that the
+  comparison is not blind. Two differed (`DuplicateEpisode`, `InvalidProviderIds`), and
+  `ItemsByPath` differs on a stacked release: 27 rows against 26, 13 episodes against 12.
+- **Nine of the sixteen compared 0 against 0 and therefore prove nothing about this defect
+  class**; for `PhantomSeason`, `SeasonFolderWithoutVideo` and `SeriesWithoutFiles` the
+  agreement is *entailed*, because one side's answer is a subset of the other's. Recorded as a
+  measurement, not as a clean bill of health - this plugin has already had a real defect hidden
+  by a route that returns nothing (`EpisodesWithoutSeason`'s missing shared ordering).
+- `InvalidProviderIdsDB` keeps its extra row deliberately: a malformed provider id on a row that
+  exists is a real finding, and the repair routes in the same controller can reach that row -
+  `GetItemById` resolves through `RetrieveItem`, which never runs `TranslateQuery`.
+- `DuplicateSeasonNumber`, `PerEpisodeFolder` and `ImplausibleGroupingKey` read Season and Series
+  rows only, and `BaseItemMapper` writes `PrimaryVersionId` solely for a `Video`. That is writer
+  discipline rather than a schema constraint - there is no CHECK, and a v12 migration back-fills
+  the column gated on the *link* type rather than the item type - but no reachable writer sets it
+  on a folder row today.
+- The `OwnerId == null || ExtraType != null` half of Jellyfin's predicate is as new as the other
+  and remains unmeasured on the routes that span every item kind. Written down rather than
+  assumed away.
+
 ## [11.29.0.0] / [12.29.0.0] - 2026-09-17
 
 ### Fixed
@@ -132,6 +213,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - On the **10.11** line this is a no-op rather than a divergence: that repository has no such
   filter at all, and no episode there carries a `PrimaryVersionId` - episode merging arrived with
   v12. So the two lines differ in what they must correct, and one line of code is right on both.
+  **Corrected 2026-09-17, and left standing rather than edited away** because a released claim
+  that quietly disappears is indistinguishable from one that was never made: "episode merging
+  arrived with v12" conflates *automatic* merging with merging as such. 10.11's
+  `POST /Videos/MergeVersions` takes `.OfType<Video>()` and `Episode : Video`, so merging
+  episodes by hand has always been possible there. The read side is what really differs -
+  measured across both shipped trees, `PrimaryVersionId == null` appears **0** times in 10.11
+  and **7** in v12, the positive control being that the 10.11 tree mentions the column in 31
+  files. On 10.11 neither half filters, so the line is a no-op only until someone merges
+  episodes by hand; after that this half would report *fewer* folders than its twin. Left
+  unconditional deliberately - see the route's remarks.
 - The rule class is untouched on purpose. It sees paths only and cannot know that two of them are
   one episode; the discriminator lives in the query, so the fix does too.
 
