@@ -148,6 +148,37 @@ public class UnflattenedReleaseController(
     /// not is how a pair stops being a control - which this plugin had already broken once, in
     /// the database half of <c>FileNameTitle</c>, and caught before shipping.
     /// </para>
+    /// <para>
+    /// <b><c>PrimaryVersionId == null</c> is the one filter this half DOES apply alone, and it
+    /// exists to stop the halves disagreeing rather than to start it.</b> Jellyfin 12 merges
+    /// alternate versions of an episode by itself, and its repository hides them from every
+    /// object-model query - <c>ApplyGeneralFiltering</c> appends
+    /// <c>PrimaryVersionId == null &amp;&amp; (OwnerId == null || ExtraType != null)</c> unless
+    /// <c>IncludeOwnedItems</c> is set. The raw table has no such thing, so without this line a
+    /// folder holding one episode stored as two stacked files arrives here as two rows, stops
+    /// being a per-episode folder, and drops out of its release's count.
+    /// </para>
+    /// <para>
+    /// Measured on the reference library at 12.28.0.0, both halves at
+    /// <c>minFolders=3</c>: 215 folders on each side, the sets identical, and <b>one</b> folder
+    /// carrying different numbers - <c>Royal.Pains.S01…</c>, 12 through
+    /// <see cref="ILibraryManager"/> against 11 here, where one episode sits in the folder as
+    /// <c>…teil-1-720p.mkv</c> and <c>…teil-2-720p.mkv</c>. Twelve is the right answer: the
+    /// criterion counts episodes, this half was counting files. The comparison that found it had
+    /// to be on the <i>counts</i>; the calling tool's acceptance run compared the sets over
+    /// <c>Folder</c>, which is the right check for "do both halves find the same releases" and is
+    /// blind to a disagreement inside a row.
+    /// </para>
+    /// <para>
+    /// <b>Only the first half of Jellyfin's predicate is mirrored, deliberately.</b> The
+    /// <c>OwnerId</c> branch measures zero on this library - had an owned non-extra episode with
+    /// a path existed, this half would have reported a folder the other half does not, and the
+    /// set comparison above would have shown it. Copying a condition that has never had an effect
+    /// would be a guess dressed as symmetry; if one ever appears, the pair reports it. On the
+    /// 10.11 line there is no such filter in the repository at all and no episode carries a
+    /// <c>PrimaryVersionId</c> - episode merging arrived with v12 - so this line is a no-op
+    /// there rather than a divergence.
+    /// </para>
     /// </remarks>
     [HttpGet("UnflattenedReleaseDB")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -169,7 +200,14 @@ public class UnflattenedReleaseController(
         {
             var rows = await dbContext.BaseItems
                 .AsNoTracking()
-                .Where(item => item.Type == episodeType && item.Path != null)
+
+                // PrimaryVersionId == null drops alternate versions, because the other half
+                // drops them too - this is Jellyfin's own predicate, not a rule of ours. See
+                // the remarks: without it this half counts FILES where the criterion counts
+                // EPISODES, and the two halves put different numbers on the same folder.
+                .Where(item => item.Type == episodeType
+                               && item.Path != null
+                               && item.PrimaryVersionId == null)
                 .Select(item => new { item.Path, item.SeriesName })
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);

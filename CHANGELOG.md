@@ -102,6 +102,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.29.0.0] / [12.29.0.0] - 2026-09-17
+
+### Fixed
+- `UnflattenedReleaseDB` counted **files** where the criterion counts **episodes**. Jellyfin 12
+  merges alternate versions of an episode by itself, so a folder holding one episode stored as
+  two stacked files arrived as two rows, stopped being a per-episode folder, and dropped out of
+  its release's count. The database half now applies `PrimaryVersionId == null`.
+- **The two halves of the pair disagreed, and the number is one row of 215.** Measured against
+  12.28.0.0 on the reference library, both halves at `minFolders=3`: 215 folders each, the sets
+  identical, and `Royal.Pains.S01…` reported as **12** through `ILibraryManager` against **11**
+  from the database - one episode sitting in the folder as `…teil-1-720p.mkv` and
+  `…teil-2-720p.mkv`. Twelve is the right answer.
+- **It was found by comparing the counts, not the sets.** The calling tool's acceptance run
+  compared the *sets* over `Folder`; that is the right check for "do both halves find the same
+  releases" and is structurally blind to a disagreement **inside** a row. The pair worked - the
+  wrong column was read. The comparison that found it carries a planted `+1` as its control, so
+  a run reporting no disagreement is distinguishable from a run that compared nothing.
+- The filter is **Jellyfin's own predicate, not one of ours**: `ApplyGeneralFiltering` in the v12
+  `BaseItemRepository` appends `PrimaryVersionId == null && (OwnerId == null || ExtraType != null)`
+  to every object-model query unless `IncludeOwnedItems` is set. The raw table has no such thing,
+  which is the whole of the difference. Read from the shipped source, not inferred from the
+  numbers.
+- **Only the first half of that predicate is mirrored, deliberately.** The `OwnerId` branch
+  measures zero here - an owned non-extra episode with a path would have made this half report a
+  folder the other one does not, and the set comparison would have shown it. Copying a condition
+  that has never had an effect would be a guess dressed up as symmetry; if one ever appears, the
+  pair reports it.
+- On the **10.11** line this is a no-op rather than a divergence: that repository has no such
+  filter at all, and no episode there carries a `PrimaryVersionId` - episode merging arrived with
+  v12. So the two lines differ in what they must correct, and one line of code is right on both.
+- The rule class is untouched on purpose. It sees paths only and cannot know that two of them are
+  one episode; the discriminator lives in the query, so the fix does too.
+
 ## [11.28.0.0] / [12.28.0.0] - 2026-09-16
 
 ### Added
