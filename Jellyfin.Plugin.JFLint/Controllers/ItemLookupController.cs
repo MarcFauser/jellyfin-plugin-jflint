@@ -273,8 +273,10 @@ public class ItemLookupController(
     /// </summary>
     /// <param name="itemId">The id of the item to walk beneath.</param>
     /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
-    /// <response code="200">The descendants, empty when there are none.</response>
+    /// <response code="200">The descendants, empty when the item has none.</response>
     /// <response code="400">The id is not a usable item id.</response>
+    /// <response code="410">No item with that id - which is a different answer from "no
+    /// descendants", and the reason this route does not return an empty list for it.</response>
     /// <returns>One row per descendant. The item itself is never included.</returns>
     /// <remarks>
     /// <para>
@@ -307,10 +309,45 @@ public class ItemLookupController(
     /// <c>DeleteItemKeepFile</c> does it: a <c>:guid</c> route constraint turns a malformed id
     /// into a 404, and 404 has to keep meaning "the plugin is not installed".
     /// </para>
+    /// <para>
+    /// <b>An id that parses but names nothing answers 410, and that is a correction rather than
+    /// a refinement.</b> It first shipped answering <c>200</c> with an empty list, which is also
+    /// what a genuine leaf answers - so "no such item" and "no children" were indistinguishable,
+    /// and the indistinguishable pair reads as the reassuring one. Measured on 12.31.0.0: a
+    /// well-formed absent GUID returned <c>200</c> / 0 rows, exactly like the episode next door.
+    /// </para>
+    /// <para>
+    /// <b>410 rather than a shape of its own, because this controller family already decided the
+    /// question.</b> <c>DeleteItemKeepFile</c> answers the same situation with
+    /// <c>410 Gone, "No item with that id."</c> and says why not 404 - that code has to keep
+    /// meaning "the plugin is not installed". Two routes of one plugin answering one situation
+    /// differently is the defect; the missing semantics was only how it showed.
+    /// </para>
+    /// <para>
+    /// <b>Existence is asked of the raw table, not of <c>GetItemById</c>.</b> This route exists
+    /// because the object model hides rows; establishing existence through a second mechanism
+    /// would be the very split it was built to avoid. A virtual entry counts as present - it is
+    /// a row.
+    /// </para>
+    /// <para>
+    /// <b>An absent id with rows still pointing at it is answered 410 too, deliberately.</b> The
+    /// question "descendants of X" presupposes X, and a route that describes the item on some
+    /// days and its orphans on others has stopped being one question. That case has its own
+    /// route: <c>OrphanedItemDB</c> tests <c>ParentMissing</c> over the raw table, and it
+    /// measured <b>0</b> on this library on 2026-09-17. This is a division of labour, not
+    /// completeness - do not read the 410 as "nothing can be hanging here".
+    /// </para>
+    /// <para>
+    /// The item can vanish between the existence check and the walk, and then the answer is
+    /// <c>200</c> with no rows for something already gone. Left open and written down rather
+    /// than wrapped in a transaction: the result is exactly the behaviour this paragraph
+    /// replaces, so the race costs nothing that was not already the case.
+    /// </para>
     /// </remarks>
     [HttpGet("DescendantsDB/{itemId}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status410Gone)]
     public async Task<ActionResult<IReadOnlyList<PathItemDto>>> GetDescendantsFromDatabaseAsync(
         string itemId,
         CancellationToken cancellationToken)
@@ -325,6 +362,20 @@ public class ItemLookupController(
         var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (dbContext.ConfigureAwait(false))
         {
+            // Asked before the walk rather than only when it comes back empty. Checking it
+            // afterwards would save one indexed lookup per folder and split this into two paths
+            // through the same method - not worth it at a few milliseconds a call.
+            var exists = await dbContext.BaseItems
+                .AsNoTracking()
+                .AnyAsync(item => item.Id == id, cancellationToken)
+                .ConfigureAwait(false);
+            if (!exists)
+            {
+                // Same wording as DeleteItemKeepFile, so a caller that logs the body does not
+                // have to tell the two routes apart.
+                return StatusCode(StatusCodes.Status410Gone, "No item with that id.");
+            }
+
             var rows = await DescendantWalk.FromDatabaseAsync(dbContext, id, cancellationToken).ConfigureAwait(false);
 
             // Falling back to the raw type name rather than to a placeholder: unlike ItemsByPathDB

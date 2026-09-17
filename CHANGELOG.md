@@ -134,6 +134,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.32.0.0] / [12.32.0.0] - 2026-09-17
+
+### Fixed
+- **`DescendantsDB` answered `200` with an empty list for an id that names nothing - the same
+  answer a genuine leaf gives.** "No such item" and "no children" were therefore
+  indistinguishable, and of the two the indistinguishable answer is the reassuring one. Measured
+  against 12.31.0.0: a well-formed absent GUID returned `200` / 0 rows, exactly like the episode
+  next door. It now answers **410 Gone**.
+- **410 rather than a shape of its own, because this controller family had already decided the
+  question.** `DeleteItemKeepFile` answers the same situation with
+  `410 Gone, "No item with that id."` and documents why not 404 - that code has to keep meaning
+  "the plugin is not installed". Two routes of one plugin answering one situation differently was
+  the defect; the missing semantics was only how it showed. Same wording in the body, so a caller
+  that logs it does not have to tell the routes apart.
+- Existence is asked of the **raw table**, not of `GetItemById`. This route exists because the
+  object model hides rows, and establishing existence through a second mechanism would be the
+  split it was built to avoid. A virtual entry counts as present - it is a row.
+- **An absent id with rows still pointing at it answers 410 as well, deliberately.** The question
+  "descendants of X" presupposes X, and a route that describes the item on some days and its
+  orphans on others has stopped being one question. That case has its own route: `OrphanedItemDB`
+  tests `ParentMissing` over the raw table and measured **0** on this library today. A division of
+  labour, not completeness - the 410 does not mean "nothing can be hanging here".
+- **The claim that prompted this was over-stated, and that is recorded rather than quietly
+  dropped.** It was first reported as a hole in a neighbouring tool's guard: a stale id gets a
+  green light and the guard fails to refuse. The neighbouring session refuted it - the action
+  after that green light is a `DELETE` on the same id, which answers 404, so nothing is stripped,
+  and the guard never protected against that case in any version. The finding stands, the
+  consequence did not. This is contract clarity, not a repair.
+- The item can vanish between the existence check and the walk, leaving `200` with no rows for
+  something already gone. Left open and written down rather than wrapped in a transaction: that
+  outcome is exactly the behaviour being replaced, so the race costs nothing that was not already
+  the case.
+- **No deliberate break for this guard, and the reason is stated rather than skipped:** forcing
+  it to fail would mean shipping a broken build to the only server that can run it. The case
+  table discriminates all three failure modes instead, because the control and the measurement
+  now return *different* codes - an inert check leaves the absent id at `200`, an inverted one
+  turns the leaf and the folder into `410`, and only the correct one yields 410 / 200-0 / 200-n.
+
 ## [11.31.0.0] / [12.31.0.0] - 2026-09-17
 
 ### Added
