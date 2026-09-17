@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.32.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.32.0.0/jellyfin-plugin-jflint_12.32.0.0.zip",
+        "checksum": "0bfe9eef612cdc9d999c1bc896bfc23a",
+        "changelog": "DescendantsDB answered 200 with an empty list for an id that names nothing - the same answer a genuine leaf gives, so \"no such item\" and \"no children\" were indistinguishable, and of the two the indistinguishable answer is the reassuring one. It now answers 410 Gone, with the same wording DeleteItemKeepFile already used for that situation; two routes of one plugin answering one situation differently was the defect. Existence is asked of the raw table, not of the object model, because that is why this route exists. An absent id with rows still pointing at it answers 410 as well - that case belongs to OrphanedItemDB, which tests ParentMissing over the raw table.",
+        "timestamp": "2026-09-17T21:20:22Z"
+      },
+      {
         "version": "12.31.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.31.0.0/jellyfin-plugin-jflint_12.31.0.0.zip",
@@ -294,6 +302,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.32.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.32.0.0/jellyfin-plugin-jflint_11.32.0.0.zip",
+        "checksum": "fd2635239b6d398fd56a7dd2025aa366",
+        "changelog": "DescendantsDB answered 200 with an empty list for an id that names nothing - the same answer a genuine leaf gives, so \"no such item\" and \"no children\" were indistinguishable, and of the two the indistinguishable answer is the reassuring one. It now answers 410 Gone, with the same wording DeleteItemKeepFile already used for that situation; two routes of one plugin answering one situation differently was the defect. Existence is asked of the raw table, not of the object model, because that is why this route exists. An absent id with rows still pointing at it answers 410 as well - that case belongs to OrphanedItemDB, which tests ParentMissing over the raw table.",
+        "timestamp": "2026-09-17T21:20:22Z"
       },
       {
         "version": "11.31.0.0",
