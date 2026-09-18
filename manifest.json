@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.33.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.33.0.0/jellyfin-plugin-jflint_12.33.0.0.zip",
+        "checksum": "522d0613b3aa31a0e157d7b8701500e4",
+        "changelog": "ImplausibleGroupingKey and its database twin report a second finding kind, NameBasedGroupingKey. On Jellyfin 12 a series carrying none of Imdb, Tvdb or Custom groups on its lowercased name, so two identically named unidentified folders merge silently; the existing check could not see it because it judges the leading provider id and this case has none. On the 10.11 line the condition cannot arise and the routes stay quiet. A caller that filters on Kind should expect the new value.",
+        "timestamp": "2026-09-18T08:58:55Z"
+      },
+      {
         "version": "12.32.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.32.0.0/jellyfin-plugin-jflint_12.32.0.0.zip",
@@ -302,6 +310,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.33.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.33.0.0/jellyfin-plugin-jflint_11.33.0.0.zip",
+        "checksum": "217fd6fd519a6d8dd1cd9090d104104e",
+        "changelog": "ImplausibleGroupingKey and its database twin report a second finding kind, NameBasedGroupingKey. On Jellyfin 12 a series carrying none of Imdb, Tvdb or Custom groups on its lowercased name, so two identically named unidentified folders merge silently; the existing check could not see it because it judges the leading provider id and this case has none. On the 10.11 line the condition cannot arise and the routes stay quiet. A caller that filters on Kind should expect the new value.",
+        "timestamp": "2026-09-18T08:58:55Z"
       },
       {
         "version": "11.32.0.0",
