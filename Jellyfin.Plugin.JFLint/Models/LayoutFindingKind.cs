@@ -85,6 +85,33 @@ public static class LayoutFindingKind
     public const string ImplausibleGroupingKey = nameof(ImplausibleGroupingKey);
 
     /// <summary>
+    /// Two or more series merged onto one grouping key that is their shared <b>name</b>,
+    /// because none of them carries an id Jellyfin groups on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This exists because <see cref="ImplausibleGroupingKey"/> cannot see it.</b> That one
+    /// judges the leading provider id, and here there is none to judge - so it returned "not
+    /// my business" and skipped the row. The two are mutually exclusive by construction: a
+    /// group has a leading id or it has not.
+    /// </para>
+    /// <para>
+    /// <b>The class is new in Jellyfin 12.</b> <c>Series.CreatePresentationUniqueKey</c> used
+    /// to let <c>userdatakeys.Count &gt; 1</c> decide <i>whether</i> to group at all, so a
+    /// series with no id fell back to its own id and could not merge with anything. On v12 the
+    /// count decides only <i>which</i> key, and the fallback is
+    /// <c>"series-" + Name.ToLowerInvariant()</c> - two identically named unidentified folders
+    /// become one series with no log line anywhere.
+    /// </para>
+    /// <para>
+    /// <b>No route pair can catch this</b>, which is why it needs a finding of its own: both
+    /// halves read the same stored key, so they agree with each other and are wrong together.
+    /// A pair is a control for a query, never for a premise the two queries share.
+    /// </para>
+    /// </remarks>
+    public const string NameBasedGroupingKey = nameof(NameBasedGroupingKey);
+
+    /// <summary>
     /// An item resolved as a film whose file name carries a season and episode number - one
     /// episode of a series filed as a movie.
     /// </summary>

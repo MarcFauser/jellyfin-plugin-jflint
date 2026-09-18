@@ -134,6 +134,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.33.0.0] / [12.33.0.0] - 2026-09-18
+
+### Added
+- **`ImplausibleGroupingKey` / `…DB` now also report `NameBasedGroupingKey`, a class Jellyfin 12
+  added and the existing check could not see.** On v12 `Series.CreatePresentationUniqueKey`
+  (`Series.cs:87`) no longer lets `userdatakeys.Count > 1` decide *whether* to group, only
+  *which* key: a series with none of Imdb, Tvdb or Custom groups on
+  `"series-" + Name.ToLowerInvariant()`, so two identically named unidentified folders merge
+  with no log line anywhere. On 10.11 each fell back to its own id and stayed separate -
+  `GetNameBasedGroupingKey` does not exist on that branch.
+- **Why the existing check was blind rather than merely incomplete.** It judges the *leading
+  provider id*, and this class has none: `LeadingProvider` returns null,
+  `ImplausibleReason(null, …)` returns null - "nothing to judge" - and the row is skipped. That
+  comment was exactly right on 10.11, where an id-less series could not merge at all; v12 turned
+  "no id" into a grouping *reason* and the assumption flipped underneath it.
+- **No route pair could have caught this**, which is the reason it needed a finding of its own
+  rather than a fix. Both halves read the same key, so they agree with each other and would be
+  wrong together: a pair is a control for a query, never for a premise the two queries share.
+- The new reason is the one place in `GroupingKeyRule` that reads the key, and it is sound
+  because it does not *parse* it - a prefix test splits nothing, which was the whole objection.
+  Both conditions are required: a custom id may legitimately be `series-something`, and
+  requiring the absence of a leading provider separates that from the fallback. The prefix is
+  also what keeps this silent on 10.11, where it never appears.
+
+### Changed
+- **A caller filtering on `Kind` has to expect the second value.** The routes are unchanged in
+  name, shape and pairing; only the set of `Kind` values they can return grew by one.
+- `GroupingKeyRule`'s remarks carried the 10.11 form of the grouping rule without saying so.
+  They now state the branch, the v12 fallback, and that **`GetUserDataKeys` inserts only Imdb,
+  Tvdb and Custom - not Tmdb**, so "has a provider id" is the test one reaches for and the wrong
+  one.
+
+Measured on 12.32.0.0 before the change: 1668 series rows unmerged, 1659 carrying a grouping id,
+**9 falling back to the name, 0 of them colliding** - real but inert, and all nine carry no id at
+all, so the Tmdb boundary has no members here yet. Control: 306 same-named series groups overall,
+so the collision test does find pairs where they exist. `DuplicateEpisode` and `DuplicateEpisodeDB`
+both returned 647 rows with 0 on a name-based key.
+
 ## [11.32.0.0] / [12.32.0.0] - 2026-09-17
 
 ### Fixed

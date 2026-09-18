@@ -666,6 +666,14 @@ public class LibraryLayoutController(
     /// library folder guid, and a custom id may contain hyphens itself, so it cannot be split
     /// back apart.
     /// </para>
+    /// <para>
+    /// <b>Two finding kinds come out of here since 11.33.0.0</b>, and a caller that filters on
+    /// <c>Kind</c> has to expect the second. <see cref="LayoutFindingKind.ImplausibleGroupingKey"/>
+    /// is the original: a leading id that could not name anything.
+    /// <see cref="LayoutFindingKind.NameBasedGroupingKey"/> is the case Jellyfin 12 added, where
+    /// there is no leading id at all and the group formed on the lowercased series name - which
+    /// the original could not report, because it needs an id to judge.
+    /// </para>
     /// </remarks>
     /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
     /// <response code="200">Findings returned.</response>
@@ -718,22 +726,39 @@ public class LibraryLayoutController(
                     }
 
                     var source = GroupingKeyRule.LeadingProvider(providerIds, out var value);
-                    var reason = GroupingKeyRule.ImplausibleReason(source, value);
-                    if (reason is null)
+                    var implausible = GroupingKeyRule.ImplausibleReason(source, value);
+                    var nameBased = GroupingKeyRule.NameBasedReason(source, group.Key);
+
+                    // Mutually exclusive by construction: an implausible id requires a leading
+                    // provider, a name-based key requires the absence of one. The order is
+                    // therefore not a precedence.
+                    string kind;
+                    string[] reasons;
+                    if (implausible is not null)
+                    {
+                        kind = LayoutFindingKind.ImplausibleGroupingKey;
+                        reasons = [implausible, $"leading id from {source}", $"key {group.Key}"];
+                    }
+                    else if (nameBased is not null)
+                    {
+                        kind = LayoutFindingKind.NameBasedGroupingKey;
+                        reasons = [nameBased, "no grouping id on this row", $"key {group.Key}"];
+                    }
+                    else
                     {
                         continue;
                     }
 
                     findings.Add(new LayoutFindingDto
                     {
-                        Kind = LayoutFindingKind.ImplausibleGroupingKey,
+                        Kind = kind,
                         ItemId = row.Id,
                         ItemType = SeriesTypeName,
                         Name = row.Name,
                         SeriesName = row.Name,
                         Path = StoredPath.Expand(appHost, row.Path),
                         GroupSize = group.Count(),
-                        Reasons = [reason, $"leading id from {source}", $"key {group.Key}"]
+                        Reasons = reasons
                     });
                 }
             }
@@ -962,9 +987,18 @@ public class LibraryLayoutController(
     /// Adds the series merged onto a grouping key that cannot be a real provider id.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Reads <c>GetPresentationUniqueKey()</c> rather than the column, which is the whole
     /// point of this half: the twin compares the stored value, and if Jellyfin ever computed
     /// the key differently from what it persisted, the pair would say so.
+    /// </para>
+    /// <para>
+    /// <b>That is also the limit of what the pair proves for
+    /// <see cref="LayoutFindingKind.NameBasedGroupingKey"/>.</b> The two halves would still
+    /// agree if Jellyfin grouped two series wrongly, because both are reading Jellyfin's own
+    /// answer - the pair controls the query, not the premise underneath it. The name-based
+    /// finding exists precisely because nothing here can disagree about it.
+    /// </para>
     /// </remarks>
     /// <param name="findings">The list to add to.</param>
     /// <param name="series">Every series in the library.</param>
@@ -985,22 +1019,38 @@ public class LibraryLayoutController(
             foreach (var one in members)
             {
                 var source = GroupingKeyRule.LeadingProvider(one.ProviderIds, out var value);
-                var reason = GroupingKeyRule.ImplausibleReason(source, value);
-                if (reason is null)
+                var implausible = GroupingKeyRule.ImplausibleReason(source, value);
+                var nameBased = GroupingKeyRule.NameBasedReason(source, group.Key);
+
+                // Mutually exclusive by construction - see the twin for why the order is not
+                // a precedence.
+                string kind;
+                string[] reasons;
+                if (implausible is not null)
+                {
+                    kind = LayoutFindingKind.ImplausibleGroupingKey;
+                    reasons = [implausible, $"leading id from {source}", $"key {group.Key}"];
+                }
+                else if (nameBased is not null)
+                {
+                    kind = LayoutFindingKind.NameBasedGroupingKey;
+                    reasons = [nameBased, "no grouping id on this row", $"key {group.Key}"];
+                }
+                else
                 {
                     continue;
                 }
 
                 findings.Add(new LayoutFindingDto
                 {
-                    Kind = LayoutFindingKind.ImplausibleGroupingKey,
+                    Kind = kind,
                     ItemId = one.Id,
                     ItemType = SeriesTypeName,
                     Name = one.Name,
                     SeriesName = one.Name,
                     Path = one.Path,
                     GroupSize = members.Count,
-                    Reasons = [reason, $"leading id from {source}", $"key {group.Key}"]
+                    Reasons = reasons
                 });
             }
         }
