@@ -156,7 +156,7 @@ public class LibraryLayoutController(
     [HttpGet("ImplausibleGroupingKey")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyList<LayoutFindingDto>> GetImplausibleGroupingKeys()
-        => Ok(FindingsOfKind(LayoutFindingKind.ImplausibleGroupingKey));
+        => Ok(FindingsOfKinds(LayoutFindingKind.ImplausibleGroupingKey, LayoutFindingKind.NameBasedGroupingKey));
 
     /// <summary>
     /// Gets films whose file name names an episode, via <see cref="ILibraryManager"/>.
@@ -894,6 +894,24 @@ public class LibraryLayoutController(
     /// <returns>The findings of that kind, ordered.</returns>
     private List<LayoutFindingDto> FindingsOfKind(string kind)
         => Sorted(BuildFindingsFromLibrary().Where(finding => string.Equals(finding.Kind, kind, StringComparison.Ordinal)));
+
+    /// <summary>
+    /// Builds the findings for a route that answers with more than one kind.
+    /// </summary>
+    /// <param name="kinds">The kinds to keep.</param>
+    /// <returns>The findings of those kinds, ordered.</returns>
+    /// <remarks>
+    /// <b>This exists because 11.33.0.0 shipped without it and the half went blind.</b> The
+    /// grouping route grew a second kind, its database twin returns whatever its own query
+    /// produces, and this half kept filtering on the single original kind - so
+    /// <see cref="LayoutFindingKind.NameBasedGroupingKey"/> could never leave it. Found at a
+    /// live fixture on 2026-09-18: the database half reported two rows, this one zero. No pair
+    /// comparison could have caught it beforehand, because both halves answered 0 and were
+    /// therefore "in agreement" - an agreement over an empty set is not a check.
+    /// </remarks>
+    private List<LayoutFindingDto> FindingsOfKinds(params string[] kinds)
+        => Sorted(BuildFindingsFromLibrary()
+            .Where(finding => Array.Exists(kinds, kind => string.Equals(finding.Kind, kind, StringComparison.Ordinal))));
 
     /// <summary>
     /// Computes every finding from the object model. This is the slow route: it

@@ -134,6 +134,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.34.0.0] / [12.34.0.0] - 2026-09-18
+
+### Fixed
+- **`ImplausibleGroupingKey` could never report `NameBasedGroupingKey`, the kind added one
+  version earlier.** The object-model route answered through `FindingsOfKind(…)`, which keeps
+  exactly **one** kind - so the new one was filtered out on its way to the response while its
+  database twin, which runs its own query, returned it. Measured live: `…DB` reported 2 rows,
+  this half 0, stable across two probes.
+- **No pair comparison could have found this, and that is the interesting part.** Before there
+  was a case, both halves answered **0** and therefore counted as agreeing - the pair read as
+  checked. An agreement over an empty set is not a check: there was nothing the two halves
+  could have disagreed about. It took a manufactured case to make them speak.
+- Fixed with `FindingsOfKinds(params string[])` next to the existing single-kind helper; the
+  grouping route now asks for both. Every other route keeps the single-kind path, because
+  every other route still answers with exactly one kind.
+
+### Measured
+- Verified at a throwaway fixture on 12.33.0.0, four folders without any provider id, live for
+  **9.9 minutes** (14:34:42Z - 14:44:33Z) and removed again; series count back to its starting
+  **1668** afterwards, which is also the control that the build was complete and is gone.
+- **The guard fires.** Two same-named id-less folders in two locations of **one** library
+  merged and were reported as `NameBasedGroupingKey`, `GroupSize 2`, on the key
+  `series-qxzzt alpha-de-5ddaa59a73205234890fdcfc683e14ed` - the shape predicted from source:
+  prefix, lowercased name, metadata language, library id.
+- **And it stays silent where it must.** The same pair of names split across **two** libraries
+  was reported by neither half. That the library id is what separates them is not an inference
+  but is written in the key itself, and the two alternative explanations are excluded rather
+  than merely unlikely: both libraries carry `EnableAutomaticSeriesGrouping=True` and both
+  `de`/`DE`. Order matters here - the merging pair has to be read first, or the non-merging one
+  proves nothing.
+
 ## [11.33.0.0] / [12.33.0.0] - 2026-09-18
 
 ### Added
