@@ -25,6 +25,11 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// <c>MediaStream.GetVideoColorRange()</c>.</param>
 /// <param name="VideoRangeType">The finer classification - HDR10, HLG, the Dolby Vision
 /// variants - from the same call.</param>
+/// <param name="Codec">The video stream's codec as Jellyfin stores it - ffprobe's
+/// <c>codec_name</c>, lower case: <c>h264</c>, <c>hevc</c>, <c>mpeg4</c>. Passed through
+/// unchanged, and deliberately not the codec tag (<c>avc1</c>, <c>hvc1</c>, <c>dvh1</c>). Always
+/// serialised, null included, so a caller can tell a stream without a recorded codec (null) from
+/// a plugin version that predates the field (absent).</param>
 public sealed record MediaInfoDto(
     Guid Id,
     string ItemType,
@@ -34,4 +39,5 @@ public sealed record MediaInfoDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? Width,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? Height,
     VideoRange VideoRange,
-    VideoRangeType VideoRangeType);
+    VideoRangeType VideoRangeType,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Codec);

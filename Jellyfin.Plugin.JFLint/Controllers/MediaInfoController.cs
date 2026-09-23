@@ -138,6 +138,11 @@ public class MediaInfoController(
                         item.Width,
                         item.Height,
                         stream.StreamIndex,
+
+                        // The ffprobe codec_name, lower case (h264, hevc, mpeg4) - reported as it
+                        // is stored. Not CodecTag: that is the container's fourcc (avc1, hvc1,
+                        // dvh1) and serves the colour range below.
+                        stream.Codec,
                         stream.CodecTag,
                         stream.DvProfile,
                         stream.RpuPresentFlag,
@@ -167,9 +172,14 @@ public class MediaInfoController(
                 .Select(group => group.OrderBy(row => row.StreamIndex).First())
                 .Select(row =>
                 {
+                    // Codec is filled although GetVideoColorRange does not read it today - checked
+                    // on release-10.11.z and v12.1, where it reads CodecTag and not Codec. It is
+                    // read here anyway, and an input left empty because the method did not need
+                    // it yet is exactly how the 1118-row defect described above came about.
                     var stream = new MediaStream
                     {
                         Type = MediaStreamType.Video,
+                        Codec = row.Codec,
                         CodecTag = row.CodecTag,
                         DvProfile = row.DvProfile,
                         RpuPresentFlag = row.RpuPresentFlag,
@@ -192,7 +202,8 @@ public class MediaInfoController(
                         row.Width,
                         row.Height,
                         videoRange,
-                        videoRangeType);
+                        videoRangeType,
+                        row.Codec);
                 });
 
             return Ok(Sorted(findings));

@@ -119,6 +119,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `-Changelog` still overwrites, which was checked rather than assumed.
 
 ### Added
+- `MediaInfoDB` now reports the video stream's **`Codec`**, requested by the calling tool for a
+  new check - a release name that says H265 over a file that is h264. Jellyfin's stored value is
+  passed through unchanged: ffprobe's `codec_name`, lower case (`h264`, `hevc`, `mpeg4`, `av1`),
+  deliberately **not** `CodecTag` (`avc1`, `hvc1`, `dvh1`), which the route already reads for
+  the colour range. Always serialised, null included, so a caller can tell "no codec recorded"
+  (null) from "plugin too old for the field" (absent).
+- Read from the same first video stream by index as every other value of the row. Checked at
+  source before building on it: `MediaStreamInfo.Codec` exists on `release-10.11.z` and `v12.1`,
+  and `MediaStream.GetVideoColorRange()` reads `CodecTag` but **not** `Codec` on either line -
+  controlled by the same scan finding `ColorSpace` and `ColorPrimaries` on v12 only. The value is
+  filled into the `MediaStream` passed to that method anyway, because leaving an input empty
+  since the method did not need it yet is how the 1118-row `DOVIInvalid` defect came about.
 - `build.ps1 -Publish`: creates one GitHub release per artifact and pushes the updated
   `manifest.json`, in that order. A manifest entry whose release does not exist yet is a
   failed download in the dashboard, so the releases go first, each uploaded ZIP is fetched
