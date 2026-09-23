@@ -7,41 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- `FileNameTitleRule.LooksLikeAFileName`: **the hyphen half's lower-case test now stops at the
-  first dot**, ported verbatim from the calling tool (upstream `a42ba5e`, 2026-09-23). A name like
-  `ind-storagewarscanada-s01e04.Ueberlistet` - lower-case hyphenated release part, capitalised
-  one-word title behind one dot - fell through both halves: one dot is too few for the dotted
-  half, and the title's capital letter failed the hyphen half. Measured upstream over 45,779
-  titles: +12 episodes, every one a release name, no season, nothing lost. A German compound is
-  capitalised *before* any dot, so `Kopf-An-Kopf-Rennen.Teil.2` stays out.
-- Until this ships, the calling tool's acceptance run reports route 95 against its own count of
-  107 - "only here 12", exactly those rows. That is the port lagging, not a defect upstream.
-- Verified against the built assemblies, both target frameworks: the 26 upstream vectors (21 on
-  the name, 5 on the exoneration clause), lifted from `acceptance/check-filetitle.ps1` by the
-  parser and the rule from the DLL by reflection - **26 of 26**. The same run on the 12.34.0.0
-  assembly gives 24 of 26, failing on exactly the two new true vectors, so the test can see the
-  change.
-
 ### Fixed
-- **`PerEpisodeFolderDB` had the SQL pre-filter defect that 11.18.0.0 fixed in
-  `FileNameTitleDB`, and nobody fixed it here.** Both routes borrow `LooksLikeAFileName`; when it
-  gained its hyphen branch, `FileNameTitleDB`'s `WHERE` got a `%-%` clause so hyphen-separated
-  names reach the rule. `PerEpisodeFolderDB` still admitted only `%.%`, so a season named
-  `tvr-lots-s02` - reported by the rule, measured by reflection - was dropped in SQL while the
-  library half, which pre-filters nothing, reported it. Now the same two clauses.
-- **The 11.18.0.0 entry says `PerEpisodeFolder` "was checked rather than assumed: it stays at
-  0"**, and that check could not have seen this: a pair agreeing at zero is an agreement over an
-  empty set, not a test of the pair. Found while porting the dot-stop change above, which does
-  **not** widen the gap - every name it adds contains a dot and so passed the old filter.
-- **No live disagreement exists to show it**, measured read-only on 2026-09-23: 10,095 seasons
-  (equal to `TotalRecordCount`), 7 with a path of their own, none of the 7 with a dot or a
-  hyphen in its name; both halves report 0. The claim rests on the query and the predicate - the
-  rule reports `tvr-lots-s02` and `tmsf-highscore-s01` (reflection on the built DLL), neither
-  contains a dot - not on a row that disagreed.
-- The calling tool's own fallback for this finding (`PerEpisodeFolderScan.FromWalk`) applies the
-  predicate to every season with a path and pre-filters nothing, so it was never affected. It was
-  exposed only through this route, which it asks first.
 - **`DescendantsDB` and `ItemsByPathDB` are complementary, and neither is a superset of the
   other** - measured at acceptance on `Buck.Rogers.S02…-EXCiTED`, and now written into
   `DescendantWalk`'s remarks rather than left to be rediscovered. The walk found two pathless
@@ -167,6 +133,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   dark dashboard without a background box. Deliberately no new plugin version: the logo
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
+
+## [11.35.0.0] / [12.35.0.0] - 2026-09-23
+
+### Changed
+- `FileNameTitleRule.LooksLikeAFileName`: **the hyphen half's lower-case test now stops at the
+  first dot**, ported verbatim from the calling tool (upstream `a42ba5e`, 2026-09-23). A name like
+  `ind-storagewarscanada-s01e04.Ueberlistet` - lower-case hyphenated release part, capitalised
+  one-word title behind one dot - fell through both halves: one dot is too few for the dotted
+  half, and the title's capital letter failed the hyphen half. Measured upstream over 45,779
+  titles: +12 episodes, every one a release name, no season, nothing lost. A German compound is
+  capitalised *before* any dot, so `Kopf-An-Kopf-Rennen.Teil.2` stays out.
+- Until this version is installed, the calling tool's acceptance run reports route 95 against
+  its own count of 107 - "only here 12", exactly those rows. That is the port lagging, not a
+  defect upstream.
+- Verified against the built assemblies, both target frameworks: the 26 upstream vectors (21 on
+  the name, 5 on the exoneration clause), lifted from `acceptance/check-filetitle.ps1` by the
+  parser and the rule from the DLL by reflection - **26 of 26**. The same run on the 12.34.0.0
+  assembly gives 24 of 26, failing on exactly the two new true vectors, so the test can see the
+  change.
+
+### Fixed
+- **`PerEpisodeFolderDB` had the SQL pre-filter defect that 11.18.0.0 fixed in
+  `FileNameTitleDB`, and nobody fixed it here.** Both routes borrow `LooksLikeAFileName`; when it
+  gained its hyphen branch, `FileNameTitleDB`'s `WHERE` got a `%-%` clause so hyphen-separated
+  names reach the rule. `PerEpisodeFolderDB` still admitted only `%.%`, so a season named
+  `tvr-lots-s02` - reported by the rule, measured by reflection - was dropped in SQL while the
+  library half, which pre-filters nothing, reported it. Now the same two clauses.
+- **The 11.18.0.0 entry says `PerEpisodeFolder` "was checked rather than assumed: it stays at
+  0"**, and that check could not have seen this: a pair agreeing at zero is an agreement over an
+  empty set, not a test of the pair. Found while porting the dot-stop change above, which does
+  **not** widen the gap - every name it adds contains a dot and so passed the old filter.
+- **No live disagreement exists to show it**, measured read-only on 2026-09-23: 10,095 seasons
+  (equal to `TotalRecordCount`), 7 with a path of their own, none of the 7 with a dot or a
+  hyphen in its name; both halves report 0. The claim rests on the query and the predicate - the
+  rule reports `tvr-lots-s02` and `tmsf-highscore-s01` (reflection on the built DLL), neither
+  contains a dot - not on a row that disagreed.
+- The calling tool's own fallback for this finding (`PerEpisodeFolderScan.FromWalk`) applies the
+  predicate to every season with a path and pre-filters nothing, so it was never affected. It was
+  exposed only through this route, which it asks first.
 
 ## [11.34.0.0] / [12.34.0.0] - 2026-09-18
 
