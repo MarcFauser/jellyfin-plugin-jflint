@@ -132,6 +132,19 @@ public static class FileNameTitleRule
     /// would empty the finding entirely.
     /// </para>
     /// <para>
+    /// <b>The case test stops at the first dot</b> - ported verbatim from upstream on 2026-09-23.
+    /// Some groups name their files <c>group-show-s01e04.Title</c>: the release part is
+    /// hyphenated and lower case, the episode title sits behind a dot and is capitalised. With a
+    /// one-word title the name has a single dot, so the dotted half does not see it, and the
+    /// hyphen half used to test the WHOLE name and lost it to the title's capital letter.
+    /// Storage Wars Canada showed it upstream: 22 of 36 such episodes found, the 14 with a
+    /// one-word title (<c>…s01e04.Ueberlistet</c>) not. Measured there over 45,779 titles,
+    /// stopping at the dot adds 12 rows and every one is a release name
+    /// (<c>tvp-lucifer-s01e01.Pilot</c>, <c>tvr-divorce-s02e04.Ohio</c>) - no season, and
+    /// nothing lost. A German compound is capitalised BEFORE any dot, so it stays out as before
+    /// (<c>Kopf-An-Kopf-Rennen.Teil.2</c>).
+    /// </para>
+    /// <para>
     /// Public because <see cref="Models.LayoutFindingKind.PerEpisodeFolder"/> asks the same
     /// question of a season's name. Sharing the predicate is the point: two rules that look
     /// alike are two rules that drift apart - and it means a change here moves that finding
@@ -147,10 +160,11 @@ public static class FileNameTitleRule
             return false;
         }
 
-        // Dots OR hyphens, and the hyphen half additionally demands lower case - see the
-        // remarks above for why that one extra condition is what makes it usable.
+        // Dots OR hyphens, and the hyphen half additionally demands lower case up to the first
+        // dot - see the remarks above for why that one extra condition is what makes it usable,
+        // and why it stops at the dot.
         return Separated(name, '.')
-               || (Separated(name, '-') && !name.Any(char.IsUpper));
+               || (Separated(name, '-') && !name.Split('.')[0].Any(char.IsUpper));
     }
 
     /// <summary>

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- `FileNameTitleRule.LooksLikeAFileName`: **the hyphen half's lower-case test now stops at the
+  first dot**, ported verbatim from the calling tool (upstream `a42ba5e`, 2026-09-23). A name like
+  `ind-storagewarscanada-s01e04.Ueberlistet` - lower-case hyphenated release part, capitalised
+  one-word title behind one dot - fell through both halves: one dot is too few for the dotted
+  half, and the title's capital letter failed the hyphen half. Measured upstream over 45,779
+  titles: +12 episodes, every one a release name, no season, nothing lost. A German compound is
+  capitalised *before* any dot, so `Kopf-An-Kopf-Rennen.Teil.2` stays out.
+- Until this ships, the calling tool's acceptance run reports route 95 against its own count of
+  107 - "only here 12", exactly those rows. That is the port lagging, not a defect upstream.
+- Verified against the built assemblies, both target frameworks: the 26 upstream vectors (21 on
+  the name, 5 on the exoneration clause), lifted from `acceptance/check-filetitle.ps1` by the
+  parser and the rule from the DLL by reflection - **26 of 26**. The same run on the 12.34.0.0
+  assembly gives 24 of 26, failing on exactly the two new true vectors, so the test can see the
+  change.
+
 ### Fixed
 - **`DescendantsDB` and `ItemsByPathDB` are complementary, and neither is a superset of the
   other** - measured at acceptance on `Buck.Rogers.S02…-EXCiTED`, and now written into
