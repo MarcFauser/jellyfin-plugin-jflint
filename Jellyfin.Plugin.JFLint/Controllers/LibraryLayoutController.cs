@@ -612,15 +612,19 @@ public class LibraryLayoutController(
         var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (dbContext.ConfigureAwait(false))
         {
-            // Coarse in SQL - a season with its own path whose name holds a dot. The piece
-            // count finishes it in memory, over a few hundred rows.
+            // Coarse in SQL - a season with its own path whose name holds a dot or a hyphen. The
+            // piece count finishes it in memory, over a few hundred rows. The hyphen clause is
+            // the same one FileNameTitleDB received with the hyphen branch of the rule on
+            // 2026-09-03, and it was missed here: tvr-lots-s02 carries no dot, so this WHERE
+            // dropped it while the library half, which pre-filters nothing, reported it.
             var candidates = await dbContext.BaseItems
                 .AsNoTracking()
                 .Where(item => item.Type == seasonType
                                && !item.IsVirtualItem
                                && !string.IsNullOrEmpty(item.Path)
                                && !string.IsNullOrEmpty(item.Name)
-                               && EF.Functions.Like(item.Name!, "%.%"))
+                               && (EF.Functions.Like(item.Name!, "%.%")
+                                   || EF.Functions.Like(item.Name!, "%-%")))
                 .Select(item => new
                 {
                     item.Id,

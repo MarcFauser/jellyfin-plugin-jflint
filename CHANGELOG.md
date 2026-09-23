@@ -24,6 +24,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   change.
 
 ### Fixed
+- **`PerEpisodeFolderDB` had the SQL pre-filter defect that 11.18.0.0 fixed in
+  `FileNameTitleDB`, and nobody fixed it here.** Both routes borrow `LooksLikeAFileName`; when it
+  gained its hyphen branch, `FileNameTitleDB`'s `WHERE` got a `%-%` clause so hyphen-separated
+  names reach the rule. `PerEpisodeFolderDB` still admitted only `%.%`, so a season named
+  `tvr-lots-s02` - reported by the rule, measured by reflection - was dropped in SQL while the
+  library half, which pre-filters nothing, reported it. Now the same two clauses.
+- **The 11.18.0.0 entry says `PerEpisodeFolder` "was checked rather than assumed: it stays at
+  0"**, and that check could not have seen this: a pair agreeing at zero is an agreement over an
+  empty set, not a test of the pair. Found while porting the dot-stop change above, which does
+  **not** widen the gap - every name it adds contains a dot and so passed the old filter.
+- **No live disagreement exists to show it**, measured read-only on 2026-09-23: 10,095 seasons
+  (equal to `TotalRecordCount`), 7 with a path of their own, none of the 7 with a dot or a
+  hyphen in its name; both halves report 0. The claim rests on the query and the predicate - the
+  rule reports `tvr-lots-s02` and `tmsf-highscore-s01` (reflection on the built DLL), neither
+  contains a dot - not on a row that disagreed.
+- The calling tool's own fallback for this finding (`PerEpisodeFolderScan.FromWalk`) applies the
+  predicate to every season with a path and pre-filters nothing, so it was never affected. It was
+  exposed only through this route, which it asks first.
 - **`DescendantsDB` and `ItemsByPathDB` are complementary, and neither is a superset of the
   other** - measured at acceptance on `Buck.Rogers.S02…-EXCiTED`, and now written into
   `DescendantWalk`'s remarks rather than left to be rediscovered. The walk found two pathless
