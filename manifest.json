@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.38.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.38.0.0/jellyfin-plugin-jflint_12.38.0.0.zip",
+        "checksum": "7b73f77187d01ea34500b416274d871b",
+        "changelog": "Fixes the audio track language in the database half of the duplicate movie check: it reported the code as stored (ger, fre, chi, cze) where Jellyfin itself reports deu, fra, zho, ces. It now reads the language through Jellyfin's own lookup, the same way Jellyfin does, so both halves and Jellyfin's API agree.",
+        "timestamp": "2026-09-24T11:42:52Z"
+      },
+      {
         "version": "12.37.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.37.0.0/jellyfin-plugin-jflint_12.37.0.0.zip",
@@ -342,6 +350,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.38.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.38.0.0/jellyfin-plugin-jflint_11.38.0.0.zip",
+        "checksum": "0347ee0623afc38b6eddc0769e1702e8",
+        "changelog": "Fixes the audio track language in the database half of the duplicate movie check: it reported the code as stored (ger, fre, chi, cze) where Jellyfin itself reports deu, fra, zho, ces. It now reads the language through Jellyfin's own lookup, the same way Jellyfin does, so both halves and Jellyfin's API agree.",
+        "timestamp": "2026-09-24T11:42:52Z"
       },
       {
         "version": "11.37.0.0",
