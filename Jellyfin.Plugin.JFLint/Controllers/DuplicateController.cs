@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations;
+using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.JFLint.Models;
 using MediaBrowser.Common.Api;
 using MediaBrowser.Controller;
@@ -267,6 +268,7 @@ public class DuplicateController(
         }).OfType<Movie>();
 
         var rows = new List<DuplicateMovieDto>();
+        var byId = new Dictionary<Guid, Movie>();
         foreach (var movie in movies)
         {
             if (string.IsNullOrEmpty(movie.Path))
@@ -293,10 +295,20 @@ public class DuplicateController(
                 movie.Size,
                 Pixels(movie.Width),
                 Pixels(movie.Height),
-                VersionLink(movie.PrimaryVersionId)));
+                VersionLink(movie.PrimaryVersionId),
+                movie.RunTimeTicks,
+                AudioStreams: null));
+            byId[movie.Id] = movie;
         }
 
-        return Ok(SortMovies(KeepColliding(rows)));
+        // The tracks only for what survives: every movie is a candidate, a few hundred collide,
+        // and GetMediaStreams asks the repository once per item. BaseItem's own method, not
+        // overridden by Video or Movie on either line - so it reads this item's streams, the
+        // same rows the database half joins.
+        var colliding = KeepColliding(rows)
+            .Select(row => row with { AudioStreams = AudioOf(byId[row.Id].GetMediaStreams()) });
+
+        return Ok(SortMovies(colliding));
     }
 
     /// <summary>
@@ -333,6 +345,7 @@ public class DuplicateController(
                     movie.Height,
                     movie.PrimaryVersionId,
                     movie.PresentationUniqueKey,
+                    movie.RunTimeTicks,
                     Providers = movie.Provider!
                         .Select(provider => new { provider.ProviderId, provider.ProviderValue })
                         .ToList()
@@ -370,10 +383,49 @@ public class DuplicateController(
                     movie.Size,
                     Pixels(movie.Width),
                     Pixels(movie.Height),
-                    VersionLink(movie.PrimaryVersionId)));
+                    VersionLink(movie.PrimaryVersionId),
+                    movie.RunTimeTicks,
+                    AudioStreams: null));
             }
 
-            return Ok(SortMovies(KeepColliding(rows)));
+            // The tracks only for what survives, in ONE query over the colliding ids rather than
+            // a join over every movie - a few hundred rows against a couple of thousand.
+            var colliding = KeepColliding(rows);
+            var ids = colliding.Select(row => row.Id).ToList();
+            var tracks = await dbContext.MediaStreamInfos
+                .AsNoTracking()
+                .Where(stream => stream.StreamType == MediaStreamTypeEntity.Audio && ids.Contains(stream.ItemId))
+                .Select(stream => new
+                {
+                    stream.ItemId,
+                    stream.StreamIndex,
+                    stream.Codec,
+                    stream.Profile,
+                    stream.Language,
+                    stream.ChannelLayout,
+                    stream.Channels
+                })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            // A lookup answers an empty sequence for an id without tracks, so every row gets a
+            // list - empty meaning "no audio track", never null.
+            var byItem = tracks.ToLookup(track => track.ItemId);
+            var withTracks = colliding.Select(row => row with
+            {
+                AudioStreams = byItem[row.Id]
+                    .OrderBy(track => track.StreamIndex)
+                    .Select(track => new AudioStreamDto(
+                        track.StreamIndex,
+                        track.Codec,
+                        track.Profile,
+                        track.Language,
+                        track.ChannelLayout,
+                        track.Channels))
+                    .ToList()
+            });
+
+            return Ok(SortMovies(withTracks));
         }
     }
 
@@ -546,4 +598,22 @@ public class DuplicateController(
     /// <param name="value">The raw width or height.</param>
     /// <returns>The value, or null when it is absent or zero.</returns>
     private static int? Pixels(int? value) => value is null or 0 ? null : value;
+
+    /// <summary>
+    /// The audio tracks of one item's streams, in stream order.
+    /// </summary>
+    /// <param name="streams">Every stream of the item.</param>
+    /// <returns>The audio tracks; empty when there are none.</returns>
+    private static List<AudioStreamDto> AudioOf(IEnumerable<MediaStream> streams)
+        => streams
+            .Where(stream => stream.Type == MediaStreamType.Audio)
+            .OrderBy(stream => stream.Index)
+            .Select(stream => new AudioStreamDto(
+                stream.Index,
+                stream.Codec,
+                stream.Profile,
+                stream.Language,
+                stream.ChannelLayout,
+                stream.Channels))
+            .ToList();
 }

@@ -33,6 +33,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   through `Evaluate` with the expected reason. The 12.36.0.0 assembly gives 33 of 40, failing on
   exactly the seven vectors only half C makes true.
 
+### Added
+- `DuplicateMovie` and `DuplicateMovieDB` report **`RunTimeTicks`** and **`AudioStreams`** per
+  file - each track's `Index`, `Codec`, `Profile`, `Language`, `ChannelLayout` and `Channels`,
+  Jellyfin's own `MediaStream` names and values, ordered by stream index. Asked for by the
+  calling tool, which shows runtime and tracks where the copies of a group differ and fetched
+  them afterwards with `/Items?Ids=…&Fields=MediaStreams` - measured there at 931 ms and 1.0 MB
+  for 202 files, against 120 ms for the route, because Jellyfin serialises every stream of
+  every file. Raw values only; the display text stays with the caller.
+- **Both routes carry both fields, and always serialise them**, nested nulls included. The
+  caller reads an absent field as "this plugin cannot" and falls back to its own query, but
+  null or an empty list as a value it shows - so leaving the fields out of one half would have
+  been correct, sending null there would not. Carrying them in both keeps the pair a cross-check
+  on the new fields too.
+- The tracks are read only **after** the rows are thinned to the colliding groups - a few
+  hundred of a couple of thousand. The database half does it in one query over those ids; the
+  library half asks `BaseItem.GetMediaStreams()` per item, which neither `Video` nor `Movie`
+  overrides on either line (read at `release-10.11.z` and `v12.1`), so both halves read the same
+  item's own streams.
+
 ### Fixed
 - **`DescendantsDB` and `ItemsByPathDB` are complementary, and neither is a superset of the
   other** - measured at acceptance on `Buck.Rogers.S02…-EXCiTED`, and now written into
