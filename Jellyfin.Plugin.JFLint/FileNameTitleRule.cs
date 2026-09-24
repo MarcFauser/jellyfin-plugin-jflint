@@ -37,6 +37,17 @@ public static class FileNameTitleRule
     public const string SameAsFileName = nameof(SameAsFileName);
 
     /// <summary>
+    /// The finding is reported because the title is the <b>start</b> of the last path segment,
+    /// going on at one of Jellyfin's cut characters - see <see cref="StartsTheLeaf"/>.
+    /// </summary>
+    /// <remarks>
+    /// Its own reason rather than <see cref="SameAsFileName"/>, although the decision is one
+    /// call: that name says the title IS the segment, and a reason that says something untrue
+    /// is worse than a coarser one. The calling tool reads this field without comparing it.
+    /// </remarks>
+    public const string StartOfFileName = nameof(StartOfFileName);
+
+    /// <summary>
     /// The provider ids that make an entry "identified".
     /// </summary>
     /// <remarks>
@@ -62,6 +73,16 @@ public static class FileNameTitleRule
         TimeSpan.FromSeconds(2));
 
     /// <summary>
+    /// The characters at which Jellyfin cuts a file name short when it has no better title.
+    /// </summary>
+    /// <remarks>
+    /// Copied, not reasoned: the separator class of the first <c>CleanStrings</c> pattern,
+    /// <c>[ _\,\.\(\)\[\]\-]</c>, in <c>Emby.Naming/Common/NamingOptions.cs</c> line 154 at tag
+    /// <c>v12.1</c> - line 152 is only <c>CleanStrings =</c>. See <see cref="StartsTheLeaf"/>.
+    /// </remarks>
+    private static readonly char[] CutAt = [' ', '_', ',', '.', '(', ')', '[', ']', '-'];
+
+    /// <summary>
     /// Decides whether an entry is a finding, and why.
     /// </summary>
     /// <param name="name">The entry's name.</param>
@@ -83,9 +104,11 @@ public static class FileNameTitleRule
             reasons.Add(DottedName);
         }
 
-        if (!identified && IsTheLeaf(name, leaf))
+        // Halves B and C behind their shared gate, decided in ONE call as upstream does, so the
+        // vectors test the gate too. Only the reason tells the two apart.
+        if (IsNamedAfterItsFile(name, leaf, identified))
         {
-            reasons.Add(SameAsFileName);
+            reasons.Add(IsTheLeaf(name, leaf) ? SameAsFileName : StartOfFileName);
         }
 
         return reasons;
@@ -202,6 +225,57 @@ public static class FileNameTitleRule
         return string.Equals(name, leaf, StringComparison.OrdinalIgnoreCase)
                || string.Equals(name, bare, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Whether an unidentified entry's title was taken from its file or folder name.
+    /// </summary>
+    /// <param name="name">The title.</param>
+    /// <param name="leaf">The last part of its path.</param>
+    /// <param name="identified">Whether the item carries provider ids.</param>
+    /// <returns>True when the title is the leaf, or the start of it.</returns>
+    /// <remarks>
+    /// Ported verbatim from upstream (3.0.0, 2026-09-24). Halves B and C behind the one
+    /// condition they share: nothing identified the entry. For an identified one both describe
+    /// a well kept library - measured upstream, 727 identified entries have a title that starts
+    /// their file name (<c>A Quiet Place</c> in <c>A Quiet Place (2018).mkv</c>), and not one of
+    /// them is a finding. One method rather than two conditions in the caller so the acceptance
+    /// check and this port can hold the whole rule, gate included, against the same vectors.
+    /// </remarks>
+    internal static bool IsNamedAfterItsFile(string name, string leaf, bool identified)
+        => !identified && (IsTheLeaf(name, leaf) || StartsTheLeaf(name, leaf));
+
+    /// <summary>Whether the title is the start of its file or folder name.</summary>
+    /// <param name="name">The title.</param>
+    /// <param name="leaf">The last part of its path.</param>
+    /// <returns>True when the leaf begins with the title and goes on at one of Jellyfin's cuts.</returns>
+    /// <remarks>
+    /// <para>
+    /// Half C. When nothing matches, Jellyfin does not show the whole file name: its first
+    /// <c>CleanStrings</c> pattern cuts it before the first release marker - a resolution, a
+    /// source, a language, a codec. <c>black-1080p.divorce.s01e01.Der.Scheidungswunsch.mkv</c>
+    /// becomes <c>black</c>, the group's prefix; <c>Futurama.1999.S08E11.German…</c> becomes
+    /// <c>Futurama</c>, the series name. Neither has the shape of a file name, so half A cannot
+    /// see them, and neither is the whole leaf, so half B cannot either.
+    /// </para>
+    /// <para>
+    /// Measured upstream on 2026-09-24 over 45,838 entries: 55 rows neither half found, every
+    /// one an unidentified episode - Disenchantment 20, Futurama 29, Archer 3, Time 2,
+    /// Detectorists 1 - and not one series, season or film. The leaf has to go on at one of
+    /// <see cref="CutAt"/>: <c>Time</c> is not what Jellyfin makes of <c>Timeless.S01E01…</c>.
+    /// </para>
+    /// <para>
+    /// Four of the six <c>CleanStrings</c> patterns (lines 154-159 at <c>v12.1</c>) end at one of
+    /// those characters: 154, 155, 158 and 159. The other two are left out on purpose: 156 cuts
+    /// before an episode range (<c>E01-E02</c>) at ANY non-word character, 157 drops a leading
+    /// <c>[group]</c>, so the title comes from the middle of the leaf. Measured upstream over the
+    /// 122 unidentified entries the rule does not find: none of either shape, with the same query
+    /// finding the 77 of halves B and C. Raised from this side while reviewing the port.
+    /// </para>
+    /// </remarks>
+    private static bool StartsTheLeaf(string name, string leaf)
+        => leaf.Length > name.Length
+           && leaf.StartsWith(name, StringComparison.OrdinalIgnoreCase)
+           && Array.IndexOf(CutAt, leaf[name.Length]) >= 0;
 
     /// <summary>
     /// The exoneration clause: a well-named entry that merely happens to contain dots.

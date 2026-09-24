@@ -517,6 +517,11 @@ public class LibraryLayoutController(
             itemTypeLookup.BaseItemKindNames[BaseItemKind.Movie]
         };
 
+        // As an array for SQL. Exact case there against the rule's case-insensitive set: a row
+        // whose key differs only in case counts as unidentified here and is ADMITTED, so the
+        // clause below can only let too much through, never too little.
+        var realIds = FileNameTitleRule.RealProviderIds.ToArray();
+
         var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (dbContext.ConfigureAwait(false))
         {
@@ -525,21 +530,20 @@ public class LibraryLayoutController(
                 .Where(item => wantedTypes.Contains(item.Type)
                                && !item.IsVirtualItem
                                && !string.IsNullOrEmpty(item.Name))
-                // A superset of what the rule can report, never a second rule. The hyphen
-                // clause was added with the hyphen branch of LooksLikeAFileName on 2026-09-03:
-                // without it a name like tmsf-highscore-s01e01 carries no dot, does not equal
-                // its leaf either (Jellyfin stripped -1080p), and would be dropped here before
-                // the rule ever saw it - while the library half, which pre-filters nothing,
-                // reported it. That is not a narrower answer, it is the pair silently ceasing
-                // to be a control, and it would have read as a defect in the port rather than
-                // in this WHERE.
+                // A superset of what the rule can report, never a second rule. Half A needs two
+                // dots or two hyphens, so a dot or a hyphen admits it. Halves B and C both need
+                // an entry with NO real provider id, so that admits them - whatever the path.
+                // This replaced a set of path clauses (ends with /Name, contains /Name.) when
+                // half C arrived on 2026-09-24: "black" in black-1080p.divorce.s01e01.mkv or
+                // "A Quiet Place" in "A Quiet Place (2018).mkv" matched none of them, and a
+                // filter one half applies and the other does not is how the pair stops being a
+                // control. The same happened twice before: here with the hyphen branch in
+                // 11.18.0.0, and in PerEpisodeFolderDB until 11.35.0.0. The id clause also ends
+                // the question of whether those path clauses compared case-sensitively in SQL
+                // while the rule does not.
                 .Where(item => EF.Functions.Like(item.Name!, "%.%")
                                || EF.Functions.Like(item.Name!, "%-%")
-                               || (item.Path != null
-                                   && (item.Path.EndsWith("/" + item.Name)
-                                       || item.Path.EndsWith("\\" + item.Name)
-                                       || item.Path.Contains("/" + item.Name + ".")
-                                       || item.Path.Contains("\\" + item.Name + "."))))
+                               || !item.Provider!.Any(provider => realIds.Contains(provider.ProviderId)))
                 .Select(item => new
                 {
                     item.Id,
