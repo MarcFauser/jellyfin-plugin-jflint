@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **`DuplicateMovieDB` reported a track's language as stored - `ger` - where Jellyfin says
+  `deu`.** The column holds ffprobe's bibliographic ISO 639-2/B code; Jellyfin's
+  `MediaStreamRepository.Map` turns it into the 639-2/T code through
+  `ILocalizationManager.TryGetISO6392TFromB` on the way out, on `release-10.11.z` and `v12.1`
+  alike. The library half reads through that repository and was right; the database half read
+  the column raw. Found at 12.37.0.0's acceptance: the halves disagreed on **187 of 202** files,
+  and the same 187 disagreed with `/Items?Ids=…&Fields=MediaStreams` - exactly the 1:1 comparison
+  the field was asked for. Now the database half calls the server's own lookup rather than a
+  table of its own. `Map` changes no other of the six fields - read, not assumed.
+- Worth recording why it got through: the pre-release checks read the source for **which
+  stream** each half reads (`GetMediaStreams` is not overridden) and never for **what the
+  repository does to a value** on the way out. The same question was asked for `MediaInfoDB`'s
+  `Codec` one version earlier and answered by measurement - 0 differences over 29,444 files -
+  which is why that route needs no change.
 - **`DescendantsDB` and `ItemsByPathDB` are complementary, and neither is a superset of the
   other** - measured at acceptance on `Buck.Rogers.S02…-EXCiTED`, and now written into
   `DescendantWalk`'s remarks rather than left to be rediscovered. The walk found two pathless

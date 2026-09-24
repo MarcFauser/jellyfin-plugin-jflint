@@ -16,6 +16,7 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -45,6 +46,8 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// <param name="appHost">Instance of the <see cref="IServerApplicationHost"/> interface, used
 /// to expand the stored form of a path - see <see cref="StoredPath"/>.</param>
 /// <param name="dbContextFactory">Factory for the Jellyfin database context.</param>
+/// <param name="localization">Instance of the <see cref="ILocalizationManager"/> interface, used
+/// to read a stored language code the way Jellyfin's own stream repository does.</param>
 [ApiController]
 [Route("JFLint")]
 [Authorize(Policy = Policies.RequiresElevation)]
@@ -53,7 +56,8 @@ public class DuplicateController(
     ILibraryManager libraryManager,
     IItemTypeLookup itemTypeLookup,
     IServerApplicationHost appHost,
-    IDbContextFactory<JellyfinDbContext> dbContextFactory) : ControllerBase
+    IDbContextFactory<JellyfinDbContext> dbContextFactory,
+    ILocalizationManager localization) : ControllerBase
 {
     // Fully qualified: ControllerBase has an instance property called MetadataProvider,
     // which shadows the enum for any unqualified use.
@@ -419,7 +423,7 @@ public class DuplicateController(
                         track.StreamIndex,
                         track.Codec,
                         track.Profile,
-                        track.Language,
+                        AsJellyfinReadsIt(track.Language),
                         track.ChannelLayout,
                         track.Channels))
                     .ToList()
@@ -598,6 +602,24 @@ public class DuplicateController(
     /// <param name="value">The raw width or height.</param>
     /// <returns>The value, or null when it is absent or zero.</returns>
     private static int? Pixels(int? value) => value is null or 0 ? null : value;
+
+    /// <summary>
+    /// A stored language code, read the way Jellyfin's stream repository reads it.
+    /// </summary>
+    /// <param name="stored">The raw <c>Language</c> column.</param>
+    /// <returns>The ISO 639-2/T code where the stored one is a 639-2/B code, else the stored value.</returns>
+    /// <remarks>
+    /// The column holds what ffprobe wrote - <c>ger</c>, the bibliographic code - and
+    /// <c>MediaStreamRepository.Map</c> turns it into <c>deu</c> through
+    /// <see cref="ILocalizationManager.TryGetISO6392TFromB"/> on the way out, on
+    /// <c>release-10.11.z</c> and <c>v12.1</c> alike. It is the only field of the six it
+    /// changes. Without this the database half said <c>ger</c> where the library half and
+    /// <c>Fields=MediaStreams</c> say <c>deu</c>: measured at 12.37.0.0's acceptance, 187 of 202
+    /// files. Calling the server's own lookup rather than keeping a table here, so the two
+    /// cannot drift.
+    /// </remarks>
+    private string? AsJellyfinReadsIt(string? stored)
+        => stored is not null && localization.TryGetISO6392TFromB(stored, out var isoT) ? isoT : stored;
 
     /// <summary>
     /// The audio tracks of one item's streams, in stream order.
