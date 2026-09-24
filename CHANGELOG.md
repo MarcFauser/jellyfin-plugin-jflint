@@ -7,51 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- `FileNameTitle` / `FileNameTitleDB` gain **half C**, ported verbatim from the calling tool
-  (upstream `63779f1`, comments as of `f9b4533`): an unidentified entry whose title is the
-  **start** of its file or folder name, going on at one of Jellyfin's cut characters. When
-  nothing matches, Jellyfin's first `CleanStrings` pattern cuts a file name before the first
-  release marker - `black-1080p.divorce.s01e01…` becomes `black`, `Futurama.1999.S08E11.German…`
-  becomes `Futurama` - and neither half A (shape) nor half B (the whole leaf) could see that.
-  The cut characters are copied from `Emby.Naming/Common/NamingOptions.cs` line 154 at tag
-  `v12.1`. Measured upstream over 45,838 entries: 55 new rows, all unidentified episodes.
-- Halves B and C are decided in one call, `IsNamedAfterItsFile`, as upstream does, so the
-  vectors test the shared gate too. The reason tells them apart: `SameAsFileName` when the title
-  is the whole leaf, the new **`StartOfFileName`** otherwise - a reason that said the title IS
-  the leaf would be untrue for half C. The calling tool reads `Reasons` without comparing it.
-- **`FileNameTitleDB`'s SQL pre-filter changed with it, or the pair would have split.** It
-  admitted a dot, a hyphen, or a path ending in `/Name` or containing `/Name.`; `black` in
-  `black-1080p…` and `A Quiet Place` in `A Quiet Place (2018).mkv` match none of those. Halves
-  B and C both need an entry with **no real provider id**, so that is now the clause, replacing
-  the path clauses. Exact case in SQL against the rule's case-insensitive set can only admit
-  more, never less. Third time this shape has been caught here - the hyphen branch in
-  11.18.0.0, `PerEpisodeFolderDB` in 11.35.0.0.
-- Verified against the built assemblies, both target frameworks: the 40 upstream vectors (21
-  on the name, 5 on the exoneration clause, 14 on halves B and C), lifted from
-  `acceptance/check-filetitle.ps1` by the parser - **40 of 40**, the decision tested directly and
-  through `Evaluate` with the expected reason. The 12.36.0.0 assembly gives 33 of 40, failing on
-  exactly the seven vectors only half C makes true.
-
-### Added
-- `DuplicateMovie` and `DuplicateMovieDB` report **`RunTimeTicks`** and **`AudioStreams`** per
-  file - each track's `Index`, `Codec`, `Profile`, `Language`, `ChannelLayout` and `Channels`,
-  Jellyfin's own `MediaStream` names and values, ordered by stream index. Asked for by the
-  calling tool, which shows runtime and tracks where the copies of a group differ and fetched
-  them afterwards with `/Items?Ids=…&Fields=MediaStreams` - measured there at 931 ms and 1.0 MB
-  for 202 files, against 120 ms for the route, because Jellyfin serialises every stream of
-  every file. Raw values only; the display text stays with the caller.
-- **Both routes carry both fields, and always serialise them**, nested nulls included. The
-  caller reads an absent field as "this plugin cannot" and falls back to its own query, but
-  null or an empty list as a value it shows - so leaving the fields out of one half would have
-  been correct, sending null there would not. Carrying them in both keeps the pair a cross-check
-  on the new fields too.
-- The tracks are read only **after** the rows are thinned to the colliding groups - a few
-  hundred of a couple of thousand. The database half does it in one query over those ids; the
-  library half asks `BaseItem.GetMediaStreams()` per item, which neither `Video` nor `Movie`
-  overrides on either line (read at `release-10.11.z` and `v12.1`), so both halves read the same
-  item's own streams.
-
 ### Fixed
 - **`DescendantsDB` and `ItemsByPathDB` are complementary, and neither is a superset of the
   other** - measured at acceptance on `Buck.Rogers.S02…-EXCiTED`, and now written into
@@ -178,6 +133,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   dark dashboard without a background box. Deliberately no new plugin version: the logo
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
+
+## [11.37.0.0] / [12.37.0.0] - 2026-09-24
+
+### Changed
+- `FileNameTitle` / `FileNameTitleDB` gain **half C**, ported verbatim from the calling tool
+  (upstream `63779f1`, comments as of `f9b4533`): an unidentified entry whose title is the
+  **start** of its file or folder name, going on at one of Jellyfin's cut characters. When
+  nothing matches, Jellyfin's first `CleanStrings` pattern cuts a file name before the first
+  release marker - `black-1080p.divorce.s01e01…` becomes `black`, `Futurama.1999.S08E11.German…`
+  becomes `Futurama` - and neither half A (shape) nor half B (the whole leaf) could see that.
+  The cut characters are copied from `Emby.Naming/Common/NamingOptions.cs` line 154 at tag
+  `v12.1`. Measured upstream over 45,838 entries: 55 new rows, all unidentified episodes.
+- Halves B and C are decided in one call, `IsNamedAfterItsFile`, as upstream does, so the
+  vectors test the shared gate too. The reason tells them apart: `SameAsFileName` when the title
+  is the whole leaf, the new **`StartOfFileName`** otherwise - a reason that said the title IS
+  the leaf would be untrue for half C. The calling tool reads `Reasons` without comparing it.
+- **`FileNameTitleDB`'s SQL pre-filter changed with it, or the pair would have split.** It
+  admitted a dot, a hyphen, or a path ending in `/Name` or containing `/Name.`; `black` in
+  `black-1080p…` and `A Quiet Place` in `A Quiet Place (2018).mkv` match none of those. Halves
+  B and C both need an entry with **no real provider id**, so that is now the clause, replacing
+  the path clauses. Exact case in SQL against the rule's case-insensitive set can only admit
+  more, never less. Third time this shape has been caught here - the hyphen branch in
+  11.18.0.0, `PerEpisodeFolderDB` in 11.35.0.0.
+- Verified against the built assemblies, both target frameworks: the 40 upstream vectors (21
+  on the name, 5 on the exoneration clause, 14 on halves B and C), lifted from
+  `acceptance/check-filetitle.ps1` by the parser - **40 of 40**, the decision tested directly and
+  through `Evaluate` with the expected reason. The 12.36.0.0 assembly gives 33 of 40, failing on
+  exactly the seven vectors only half C makes true.
+
+### Added
+- `DuplicateMovie` and `DuplicateMovieDB` report **`RunTimeTicks`** and **`AudioStreams`** per
+  file - each track's `Index`, `Codec`, `Profile`, `Language`, `ChannelLayout` and `Channels`,
+  Jellyfin's own `MediaStream` names and values, ordered by stream index. Asked for by the
+  calling tool, which shows runtime and tracks where the copies of a group differ and fetched
+  them afterwards with `/Items?Ids=…&Fields=MediaStreams` - measured there at 931 ms and 1.0 MB
+  for 202 files, against 120 ms for the route, because Jellyfin serialises every stream of
+  every file. Raw values only; the display text stays with the caller.
+- **Both routes carry both fields, and always serialise them**, nested nulls included. The
+  caller reads an absent field as "this plugin cannot" and falls back to its own query, but
+  null or an empty list as a value it shows - so leaving the fields out of one half would have
+  been correct, sending null there would not. Carrying them in both keeps the pair a cross-check
+  on the new fields too.
+- The tracks are read only **after** the rows are thinned to the colliding groups - a few
+  hundred of a couple of thousand. The database half does it in one query over those ids; the
+  library half asks `BaseItem.GetMediaStreams()` per item, which neither `Video` nor `Movie`
+  overrides on either line (read at `release-10.11.z` and `v12.1`), so both halves read the same
+  item's own streams.
 
 ## [11.36.0.0] / [12.36.0.0] - 2026-09-23
 
