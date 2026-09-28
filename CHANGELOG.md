@@ -134,6 +134,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.42.0.0] / [12.42.0.0] - 2026-09-29
+
+### Added
+- **`MediaInfoDB?withoutAudioLanguage=de`**: only the files without an audio track in that
+  language, combinable with `includeAudio=true`. Asked for by the user. The same rule and the same
+  SQL-first filter as `AudioStreamsDB?withoutLanguage`, the same 400 for a language the server does
+  not know; it narrows the rows and does not add the tracks. A file without a video stream is not
+  in this route either way - the three never-probed files are only in `AudioStreamsDB`.
+
+### Changed
+- The language parameter and the SQL filter moved into two helpers used by both routes
+  (`ResolveLanguage`, `WithoutLanguage`), so the rule exists once. `MediaInfoDB` reads the tracks
+  when it sends them or filters by them, and not otherwise.
+- Without the new parameter both routes are meant to answer byte-identically to 12.41.2.0;
+  `MediaInfoDB` with and without `includeAudio=true` was saved before the upgrade to hold it
+  against (13,196,861 and 18,857,500 bytes; the second still hash-equal to 12.39.0.0's).
+
 ## [11.41.2.0] / [12.41.2.0] - 2026-09-29
 
 ### Fixed

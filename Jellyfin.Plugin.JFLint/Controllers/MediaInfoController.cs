@@ -44,6 +44,13 @@ public class MediaInfoController(
     ILocalizationManager localization) : ControllerBase
 {
     /// <summary>
+    /// The tracks of a <c>MediaInfoDB</c> call that neither sends them nor filters by them - an
+    /// empty lookup, so the query is not run at all.
+    /// </summary>
+    private static readonly ILookup<Guid, AudioStreamDto> NoTracks =
+        Array.Empty<AudioStreamDto>().ToLookup(_ => Guid.Empty);
+
+    /// <summary>
     /// Gets the video properties and audio tracks of every movie and episode that has a video
     /// stream.
     /// </summary>
@@ -111,18 +118,39 @@ public class MediaInfoController(
     /// served by <c>AudioStreamsDB</c>, which also lists the files this route cannot: it starts
     /// from the video stream, so a file Jellyfin recorded no stream for has no row here at all.
     /// </para>
+    /// <para>
+    /// <b><c>withoutAudioLanguage</c> is <c>AudioStreamsDB</c>'s <c>withoutLanguage</c> on this
+    /// route</b>, since 12.42.0.0: the same rule, the same filter in SQL first, the same 400 for a
+    /// language the server does not know. It narrows the rows and does not add the tracks - that
+    /// is still <c>includeAudio=true</c>. A file without a video stream is not in this route
+    /// either way, the never-probed ones included; <c>AudioStreamsDB</c> lists those.
+    /// </para>
     /// </remarks>
     /// <param name="includeAudio">Optional. <c>true</c> adds every file's audio tracks as
-    /// <c>AudioStreams</c>; without it the field is absent and the tracks are not read.</param>
+    /// <c>AudioStreams</c>; without it the field is absent.</param>
+    /// <param name="withoutAudioLanguage">Optional. Only files without an audio track in this
+    /// language - <c>de</c>, <c>deu</c>, <c>ger</c> or <c>German</c> all mean German. Absent or
+    /// empty means every file.</param>
     /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
     /// <response code="200">Video properties returned.</response>
-    /// <returns>One row per movie or episode that has a video stream.</returns>
+    /// <response code="400"><c>withoutAudioLanguage</c> names no language the server knows.</response>
+    /// <returns>One row per movie or episode that has a video stream, or per such file without a
+    /// track in the given language.</returns>
     [HttpGet("MediaInfoDB")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<IReadOnlyList<MediaInfoDto>>> GetMediaInfoFromDatabaseAsync(
         [FromQuery] bool includeAudio,
+        [FromQuery] string? withoutAudioLanguage,
         CancellationToken cancellationToken)
     {
+        var excluded = ResolveLanguage(withoutAudioLanguage, out var refused);
+        if (refused)
+        {
+            return BadRequest(
+                "withoutAudioLanguage must name a language the server knows - a code such as de, deu or ger, or a name such as German.");
+        }
+
         var movieType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Movie];
         var episodeType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Episode];
         var shortNames = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -134,6 +162,12 @@ public class MediaInfoController(
         var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (dbContext.ConfigureAwait(false))
         {
+            var candidates = MoviesAndEpisodes(dbContext, movieType, episodeType);
+            if (excluded is not null)
+            {
+                candidates = WithoutLanguage(dbContext, candidates, excluded);
+            }
+
             // One join, not one query per item. Width and Height come from the ITEM rather
             // than the stream, so they are the same numbers every other route here reports;
             // the stream carries its own pair and they are not always equal.
@@ -141,7 +175,7 @@ public class MediaInfoController(
                 .AsNoTracking()
                 .Where(stream => stream.StreamType == MediaStreamTypeEntity.Video)
                 .Join(
-                    MoviesAndEpisodes(dbContext, movieType, episodeType),
+                    candidates,
                     stream => stream.ItemId,
                     item => item.Id,
                     (stream, item) => new
@@ -180,14 +214,13 @@ public class MediaInfoController(
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            // Only on request, and then as a second query instead of a second join into the one
-            // above: that one keeps a single video stream per item, and joining audio into it
-            // would multiply its rows by the track count before the grouping throws them away.
-            var tracksByItem = includeAudio
-                ? await ReadAudioTracksAsync(
-                        dbContext, MoviesAndEpisodes(dbContext, movieType, episodeType), cancellationToken)
-                    .ConfigureAwait(false)
-                : null;
+            // Read when they are sent or when the language filter needs them to decide what SQL
+            // could not, and then as a second query instead of a second join into the one above:
+            // that one keeps a single video stream per item, and joining audio into it would
+            // multiply its rows by the track count before the grouping throws them away.
+            var tracksByItem = includeAudio || excluded is not null
+                ? await ReadAudioTracksAsync(dbContext, candidates, cancellationToken).ConfigureAwait(false)
+                : NoTracks;
 
             // An item may hold more than one video stream; the first by index is the one the
             // server treats as the video, and reporting all of them would put an item into the
@@ -195,6 +228,8 @@ public class MediaInfoController(
             var findings = rows
                 .GroupBy(row => row.Id)
                 .Select(group => group.OrderBy(row => row.StreamIndex).First())
+                .Where(row => excluded is null
+                    || !tracksByItem[row.Id].Any(track => StreamLanguage.IsIn(track.Language, excluded)))
                 .Select(row =>
                 {
                     // Codec is filled although GetVideoColorRange does not read it today - checked
@@ -229,7 +264,7 @@ public class MediaInfoController(
                         videoRange,
                         videoRangeType,
                         row.Codec,
-                        tracksByItem?[row.Id].ToList());
+                        includeAudio ? tracksByItem[row.Id].ToList() : null);
                 });
 
             return Ok(Sorted(findings));
@@ -293,15 +328,11 @@ public class MediaInfoController(
         [FromQuery] string? withoutLanguage,
         CancellationToken cancellationToken)
     {
-        IReadOnlySet<string>? excluded = null;
-        if (!string.IsNullOrWhiteSpace(withoutLanguage))
+        var excluded = ResolveLanguage(withoutLanguage, out var refused);
+        if (refused)
         {
-            excluded = StreamLanguage.CodesOf(localization, withoutLanguage);
-            if (excluded is null)
-            {
-                return BadRequest(
-                    "withoutLanguage must name a language the server knows - a code such as de, deu or ger, or a name such as German.");
-            }
+            return BadRequest(
+                "withoutLanguage must name a language the server knows - a code such as de, deu or ger, or a name such as German.");
         }
 
         var movieType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Movie];
@@ -318,27 +349,7 @@ public class MediaInfoController(
             var candidates = MoviesAndEpisodes(dbContext, movieType, episodeType);
             if (excluded is not null)
             {
-                // The filter runs in SQL first, so the items that have the language - 27,000 of
-                // 29,000 for German on the reference library - are never read, and neither are
-                // their tracks. SQL drops only an item with a track whose STORED code is one of
-                // the language's codes exactly, as listed or upper case: such a track matches
-                // IsIn as well, since the only thing Jellyfin changes on the way out is a B code
-                // into its T code, and both are in the set. Everything SQL cannot decide exactly -
-                // de-DE, a padded or mixed-case code - is kept here and decided by IsIn below,
-                // which remains the rule. Two primitives only: an array Contains, which
-                // FileNameTitleDB has run on a 10.11 server since 2026-08, and a subquery
-                // Contains (NOT IN (SELECT ...)) - an old EF translation, but one that has not run
-                // on EF Core 9 here, because the reference server has been on 12 since 2026-09-10.
-                var exact = excluded
-                    .Concat(excluded.Select(code => code.ToUpperInvariant()))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
-                var speaking = dbContext.MediaStreamInfos
-                    .Where(stream => stream.StreamType == MediaStreamTypeEntity.Audio
-                        && stream.Language != null
-                        && exact.Contains(stream.Language))
-                    .Select(stream => stream.ItemId);
-                candidates = candidates.Where(item => !speaking.Contains(item.Id));
+                candidates = WithoutLanguage(dbContext, candidates, excluded);
             }
 
             var items = await candidates
@@ -379,6 +390,71 @@ public class MediaInfoController(
 
             return Ok(Sorted(findings));
         }
+    }
+
+    /// <summary>
+    /// Resolves an optional language parameter.
+    /// </summary>
+    /// <param name="value">What the caller sent.</param>
+    /// <param name="refused">True when a value was sent that names no language the server
+    /// knows - the caller answers 400, not an empty list, which would read as "every file has a
+    /// track in it".</param>
+    /// <returns>The language's codes, or null for no filter - absent, empty or blank.</returns>
+    private IReadOnlySet<string>? ResolveLanguage(string? value, out bool refused)
+    {
+        refused = false;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var codes = StreamLanguage.CodesOf(localization, value);
+        refused = codes is null;
+        return codes;
+    }
+
+    /// <summary>
+    /// Narrows the items to those without an audio track in the language, in SQL - the part of
+    /// the filter the database can decide exactly.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// So the items that have the language - 27,000 of 29,000 for German on the reference
+    /// library - are never read, and neither are their tracks. Measured on
+    /// <c>AudioStreamsDB?withoutLanguage=de</c>: 1,659 ms filtering in memory, 684 ms with this.
+    /// </para>
+    /// <para>
+    /// SQL drops only an item with a track whose STORED code is one of the language's codes
+    /// exactly, as listed or upper case. Such a track matches <see cref="StreamLanguage.IsIn"/>
+    /// as well, since the only thing Jellyfin changes on the way out is a B code into its T code,
+    /// and both are in the set. Everything SQL cannot decide exactly - <c>de-DE</c>, a padded or
+    /// mixed-case code - is kept, and every caller must still apply <c>IsIn</c> to what comes
+    /// back, which remains the rule.
+    /// </para>
+    /// <para>
+    /// Two primitives only: an array <c>Contains</c>, which <c>FileNameTitleDB</c> has run on a
+    /// 10.11 server since 2026-08, and a subquery <c>Contains</c> (<c>NOT IN (SELECT ...)</c>) - an
+    /// old EF translation, but one that has not run on EF Core 9 here, because the reference
+    /// server has been on 12 since 2026-09-10.
+    /// </para>
+    /// </remarks>
+    /// <param name="dbContext">The open database context.</param>
+    /// <param name="items">The items to narrow.</param>
+    /// <param name="codes">What <see cref="StreamLanguage.CodesOf"/> returned.</param>
+    /// <returns>The query, not yet run.</returns>
+    private static IQueryable<BaseItemEntity> WithoutLanguage(
+        JellyfinDbContext dbContext, IQueryable<BaseItemEntity> items, IReadOnlySet<string> codes)
+    {
+        var exact = codes
+            .Concat(codes.Select(code => code.ToUpperInvariant()))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var speaking = dbContext.MediaStreamInfos
+            .Where(stream => stream.StreamType == MediaStreamTypeEntity.Audio
+                && stream.Language != null
+                && exact.Contains(stream.Language))
+            .Select(stream => stream.ItemId);
+        return items.Where(item => !speaking.Contains(item.Id));
     }
 
     /// <summary>
