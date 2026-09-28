@@ -12,6 +12,7 @@ using MediaBrowser.Common.Api;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -29,6 +30,8 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 /// <param name="appHost">Instance of the <see cref="IServerApplicationHost"/> interface, used
 /// to expand the stored form of a path - see <see cref="StoredPath"/>.</param>
 /// <param name="dbContextFactory">Factory for the Jellyfin database context.</param>
+/// <param name="localization">Instance of the <see cref="ILocalizationManager"/> interface, used
+/// to read an audio track's language the way Jellyfin does - see <see cref="StreamLanguage"/>.</param>
 [ApiController]
 [Route("JFLint")]
 [Authorize(Policy = Policies.RequiresElevation)]
@@ -36,10 +39,12 @@ namespace Jellyfin.Plugin.JFLint.Controllers;
 public class MediaInfoController(
     IItemTypeLookup itemTypeLookup,
     IServerApplicationHost appHost,
-    IDbContextFactory<JellyfinDbContext> dbContextFactory) : ControllerBase
+    IDbContextFactory<JellyfinDbContext> dbContextFactory,
+    ILocalizationManager localization) : ControllerBase
 {
     /// <summary>
-    /// Gets the video properties of every movie and episode that has a video stream.
+    /// Gets the video properties and audio tracks of every movie and episode that has a video
+    /// stream.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -164,6 +169,36 @@ public class MediaInfoController(
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            // Every audio track of the same items, in ONE more query rather than one per item -
+            // asked for by the calling tool for a "no track in language X" check. Kept as a
+            // second query instead of a second join into the one above: that one keeps a
+            // single video stream per item, and joining audio into it would multiply its rows
+            // by the track count before the grouping throws them away again.
+            var tracks = await dbContext.MediaStreamInfos
+                .AsNoTracking()
+                .Where(stream => stream.StreamType == MediaStreamTypeEntity.Audio)
+                .Join(
+                    dbContext.BaseItems.Where(item =>
+                        (item.Type == movieType || item.Type == episodeType) && !item.IsVirtualItem),
+                    stream => stream.ItemId,
+                    item => item.Id,
+                    (stream, item) => new
+                    {
+                        stream.ItemId,
+                        stream.StreamIndex,
+                        stream.Codec,
+                        stream.Profile,
+                        stream.Language,
+                        stream.ChannelLayout,
+                        stream.Channels
+                    })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            // A lookup answers an empty sequence for an item without tracks, so every row gets a
+            // list - empty meaning "no audio track", never null.
+            var tracksByItem = tracks.ToLookup(track => track.ItemId);
+
             // An item may hold more than one video stream; the first by index is the one the
             // server treats as the video, and reporting all of them would put an item into the
             // answer twice under one id.
@@ -203,7 +238,17 @@ public class MediaInfoController(
                         row.Height,
                         videoRange,
                         videoRangeType,
-                        row.Codec);
+                        row.Codec,
+                        tracksByItem[row.Id]
+                            .OrderBy(track => track.StreamIndex)
+                            .Select(track => new AudioStreamDto(
+                                track.StreamIndex,
+                                track.Codec,
+                                track.Profile,
+                                StreamLanguage.AsJellyfinReadsIt(localization, track.Language),
+                                track.ChannelLayout,
+                                track.Channels))
+                            .ToList());
                 });
 
             return Ok(Sorted(findings));

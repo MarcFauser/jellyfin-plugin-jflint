@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Jellyfin.Data.Enums;
 
@@ -30,6 +31,11 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// unchanged, and deliberately not the codec tag (<c>avc1</c>, <c>hvc1</c>, <c>dvh1</c>). Always
 /// serialised, null included, so a caller can tell a stream without a recorded codec (null) from
 /// a plugin version that predates the field (absent).</param>
+/// <param name="AudioStreams">Every audio track of the file, ordered by stream index, with
+/// Jellyfin's own <c>MediaStream</c> names and values - the language read the way Jellyfin reads
+/// it (<see cref="StreamLanguage"/>). Never null: an empty list means the file has no audio
+/// track, and an absent field means a plugin version that predates it. The same shape and the
+/// same promises as on <c>DuplicateMovie</c>.</param>
 public sealed record MediaInfoDto(
     Guid Id,
     string ItemType,
@@ -40,4 +46,5 @@ public sealed record MediaInfoDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? Height,
     VideoRange VideoRange,
     VideoRangeType VideoRangeType,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Codec);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Codec,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] IReadOnlyList<AudioStreamDto> AudioStreams);

@@ -134,6 +134,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.39.0.0] / [12.39.0.0] - 2026-09-29
+
+### Added
+- `MediaInfoDB` reports every audio track of a file as **`AudioStreams`** - the same
+  `AudioStreamDto` as on `DuplicateMovie` (`Index`, `Codec`, `Profile`, `Language`,
+  `ChannelLayout`, `Channels`) and the same promises: always serialised, never null, `[]` for a
+  file without audio, nested nulls serialised, ordered by stream index. Asked for by the calling
+  tool for a "no audio track in language X" check, which without it has only
+  `Fields=MediaStreams` - measured there at 126 s and 126 MB for the episodes alone.
+- One extra query over `MediaStreamInfos` for the same items, not one per item and not a second
+  join into the video query, which keeps one video stream per item and would otherwise multiply
+  its rows by the track count first. The route still has no library twin: `GetMediaStreams`
+  asks one item at a time.
+
+### Changed
+- The language rule moved out of `DuplicateController` into **`StreamLanguage`**, now used by
+  both routes: a stored ISO 639-2/B code (`ger`) is read the way `MediaStreamRepository.Map`
+  reads it (`deu`), everything else - null, `und`, `de` - passes unchanged. Two copies of one
+  rule would be two rules.
+
+### Measured
+- Baseline on 12.38.0.0, warm, no task running (2026-09-29 00:01): `MediaInfoDB` 29,467 rows,
+  13.2 MB, median 1,006 ms over seven runs. What the tracks cost is measured at acceptance, and
+  decides whether they stay here or move to a route of their own.
+
 ## [11.38.0.0] / [12.38.0.0] - 2026-09-24
 
 ### Fixed
