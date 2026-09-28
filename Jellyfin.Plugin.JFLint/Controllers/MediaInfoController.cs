@@ -103,13 +103,24 @@ public class MediaInfoController(
     /// only cross-check now needs its own correction applied before the numbers can be compared,
     /// and a standing unexplained residue is exactly what would hide the next real defect.
     /// </para>
+    /// <para>
+    /// <b>The audio tracks come only on request</b> (<c>includeAudio=true</c>), since 12.41.0.0.
+    /// 12.39.0.0 added them unconditionally, and measured warm that took the route from a median
+    /// of 1,006 ms and 13.2 MB to 1,939 ms and 18.9 MB - paid on every call, by callers that only
+    /// want the video properties. A caller that wants the tracks for a language check is better
+    /// served by <c>AudioStreamsDB</c>, which also lists the files this route cannot: it starts
+    /// from the video stream, so a file Jellyfin recorded no stream for has no row here at all.
+    /// </para>
     /// </remarks>
+    /// <param name="includeAudio">Optional. <c>true</c> adds every file's audio tracks as
+    /// <c>AudioStreams</c>; without it the field is absent and the tracks are not read.</param>
     /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
     /// <response code="200">Video properties returned.</response>
     /// <returns>One row per movie or episode that has a video stream.</returns>
     [HttpGet("MediaInfoDB")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<MediaInfoDto>>> GetMediaInfoFromDatabaseAsync(
+        [FromQuery] bool includeAudio,
         CancellationToken cancellationToken)
     {
         var movieType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Movie];
@@ -169,13 +180,14 @@ public class MediaInfoController(
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            // Asked for by the calling tool for a "no track in language X" check. Kept as a second
-            // query instead of a second join into the one above: that one keeps a single video
-            // stream per item, and joining audio into it would multiply its rows by the track
-            // count before the grouping throws them away again.
-            var tracksByItem = await ReadAudioTracksAsync(
-                    dbContext, MoviesAndEpisodes(dbContext, movieType, episodeType), cancellationToken)
-                .ConfigureAwait(false);
+            // Only on request, and then as a second query instead of a second join into the one
+            // above: that one keeps a single video stream per item, and joining audio into it
+            // would multiply its rows by the track count before the grouping throws them away.
+            var tracksByItem = includeAudio
+                ? await ReadAudioTracksAsync(
+                        dbContext, MoviesAndEpisodes(dbContext, movieType, episodeType), cancellationToken)
+                    .ConfigureAwait(false)
+                : null;
 
             // An item may hold more than one video stream; the first by index is the one the
             // server treats as the video, and reporting all of them would put an item into the
@@ -217,7 +229,7 @@ public class MediaInfoController(
                         videoRange,
                         videoRangeType,
                         row.Codec,
-                        tracksByItem[row.Id].ToList());
+                        tracksByItem?[row.Id].ToList());
                 });
 
             return Ok(Sorted(findings));
@@ -239,8 +251,8 @@ public class MediaInfoController(
     /// <para>
     /// The second reason is cost: the tracks roughly doubled <c>MediaInfoDB</c> (median
     /// 1,006 ms to 1,939 ms, 13.2 MB to 18.9 MB), and the calling tool reads that route twice per
-    /// sweep. <c>MediaInfoDB</c> keeps its <c>AudioStreams</c> until the caller has moved here -
-    /// removing a field a released caller reads would break it.
+    /// sweep. Since this route exists, <c>MediaInfoDB</c> sends them only on
+    /// <c>includeAudio=true</c>.
     /// </para>
     /// <para>
     /// <b>One row per file, and no twin</b> - both for the same reasons as <c>MediaInfoDB</c>.
@@ -249,15 +261,43 @@ public class MediaInfoController(
     /// <c>IMediaSourceManager.GetMediaStreams</c> answers one item at a time, so a library half
     /// would be tens of thousands of calls ending in the same stored rows.
     /// </para>
+    /// <para>
+    /// <b><c>withoutLanguage</c> answers the question the caller asks, on the server</b>, so the
+    /// rows for "has a German track" never leave it. A row is dropped only when one of its tracks
+    /// names that language (<see cref="StreamLanguage.IsIn"/>); everything else stays - a file
+    /// whose tracks name other languages, a file with a track that names none, and a file with no
+    /// track at all. The last two are not "no German track" in the same sense as the first, and
+    /// the rows keep their tracks and <c>StreamCount</c> so the caller can tell them apart.
+    /// </para>
     /// </remarks>
+    /// <param name="withoutLanguage">Optional. Only files without an audio track in this
+    /// language - <c>de</c>, <c>deu</c>, <c>ger</c> or <c>German</c> all mean German. Absent or
+    /// empty means every file.</param>
     /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
     /// <response code="200">Audio tracks returned.</response>
-    /// <returns>One row per movie or episode that is not virtual.</returns>
+    /// <response code="400"><c>withoutLanguage</c> names no language the server knows. Refused
+    /// rather than answered with an empty list, which would read as "every file has a track in
+    /// it".</response>
+    /// <returns>One row per movie or episode that is not virtual, or per such file without a track
+    /// in the given language.</returns>
     [HttpGet("AudioStreamsDB")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<IReadOnlyList<ItemAudioStreamsDto>>> GetAudioStreamsFromDatabaseAsync(
+        [FromQuery] string? withoutLanguage,
         CancellationToken cancellationToken)
     {
+        IReadOnlySet<string>? excluded = null;
+        if (!string.IsNullOrWhiteSpace(withoutLanguage))
+        {
+            excluded = StreamLanguage.CodesOf(localization, withoutLanguage);
+            if (excluded is null)
+            {
+                return BadRequest(
+                    "withoutLanguage must name a language the server knows - a code such as de, deu or ger, or a name such as German.");
+            }
+        }
+
         var movieType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Movie];
         var episodeType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Episode];
         var shortNames = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -294,14 +334,17 @@ public class MediaInfoController(
                     dbContext, MoviesAndEpisodes(dbContext, movieType, episodeType), cancellationToken)
                 .ConfigureAwait(false);
 
-            var findings = items.Select(item => new ItemAudioStreamsDto(
-                item.Id,
-                shortNames[item.Type],
-                item.Name,
-                item.SeriesName,
-                StoredPath.Expand(appHost, item.Path),
-                streamCounts.GetValueOrDefault(item.Id),
-                tracksByItem[item.Id].ToList()));
+            var findings = items
+                .Where(item => excluded is null
+                    || !tracksByItem[item.Id].Any(track => StreamLanguage.IsIn(track.Language, excluded)))
+                .Select(item => new ItemAudioStreamsDto(
+                    item.Id,
+                    shortNames[item.Type],
+                    item.Name,
+                    item.SeriesName,
+                    StoredPath.Expand(appHost, item.Path),
+                    streamCounts.GetValueOrDefault(item.Id),
+                    tracksByItem[item.Id].ToList()));
 
             return Ok(Sorted(findings));
         }

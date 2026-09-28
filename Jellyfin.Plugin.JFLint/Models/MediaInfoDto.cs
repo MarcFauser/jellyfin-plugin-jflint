@@ -33,9 +33,10 @@ namespace Jellyfin.Plugin.JFLint.Models;
 /// a plugin version that predates the field (absent).</param>
 /// <param name="AudioStreams">Every audio track of the file, ordered by stream index, with
 /// Jellyfin's own <c>MediaStream</c> names and values - the language read the way Jellyfin reads
-/// it (<see cref="StreamLanguage"/>). Never null: an empty list means the file has no audio
-/// track, and an absent field means a plugin version that predates it. The same shape and the
-/// same promises as on <c>DuplicateMovie</c>.</param>
+/// it (<see cref="StreamLanguage"/>). Sent only when the caller asks with <c>includeAudio=true</c>;
+/// otherwise null, and a null is not written - the field is absent, as it is from a plugin that
+/// predates it. When sent it is never null: an empty list means the file has no audio track. The
+/// same shape as on <c>DuplicateMovie</c> and <c>AudioStreamsDB</c>.</param>
 public sealed record MediaInfoDto(
     Guid Id,
     string ItemType,
@@ -47,4 +48,7 @@ public sealed record MediaInfoDto(
     VideoRange VideoRange,
     VideoRangeType VideoRangeType,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Codec,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] IReadOnlyList<AudioStreamDto> AudioStreams);
+    // WhenWritingNull is the server-wide default already, and written down anyway: the absent
+    // field IS the answer to a call without includeAudio, and it must not turn into a literal
+    // null should that default ever change - the other nullable fields here say Never on purpose.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AudioStreamDto>? AudioStreams);

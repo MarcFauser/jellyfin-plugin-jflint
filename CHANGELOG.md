@@ -134,6 +134,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.41.0.0] / [12.41.0.0] - 2026-09-29
+
+### Added
+- **`AudioStreamsDB?withoutLanguage=de`** answers the caller's question on the server: only the
+  files without an audio track in that language come back, so the rows that have one never leave
+  it. Asked for by the user, for the calling tool's "no German track" tab, which today fetches
+  every file and filters on its side.
+- The language is resolved through the server's own list (`ILocalizationManager.FindLanguageInfo`
+  over `iso6392.txt`, read on `release-10.11.z` and `v12.1`): `de`, `deu`, `ger` and `German` all
+  mean German, and a track matches on the entry's two-letter code or any three-letter one - `de`,
+  `deu`, `ger`. A regional tag counts for its language (`de-DE`), the region is cut off the
+  parameter the same way, and case does not matter. That is the calling tool's own rule, with the
+  codes taken from the server instead of from .NET.
+- A row is dropped only when a track names the language. A file whose tracks name other
+  languages stays, and so do a file with a track that names none (`null`, `und`) and a file with
+  no track at all - the calling tool keeps these as three groups, and the rows carry their tracks
+  and `StreamCount` so it still can.
+- A language the server does not know is refused with **400**, not answered with `[]`: an empty
+  list would read as "every file has a track in it". Absent, empty or blank means no filter.
+- `11.40.0.0` / `12.40.0.0` was never published; `AudioStreamsDB` reaches the catalogue with this
+  version.
+
+### Changed
+- **`MediaInfoDB` sends `AudioStreams` only on `includeAudio=true`**, and without it does not read
+  the tracks at all. Decided by the user: 12.39.0.0 added them unconditionally, which took the
+  route from a median of 1,006 ms and 13.2 MB to 1,939 ms and 18.9 MB for every caller, and a
+  language check is better served by `AudioStreamsDB` anyway - that one also lists the files
+  `MediaInfoDB` cannot, having no video stream to join from.
+- **This changes what a caller without the parameter receives.** The field is absent, as it is
+  from a plugin before 12.39.0.0; with the parameter the answer is meant to be byte-identical to
+  12.39.0.0's, which was saved before the upgrade to hold it against. The calling tool's released
+  audio tab reads the field without asking for it, treats the absence as an older plugin and
+  falls back until it asks - that is its designed path, not an error.
+
+### Measured
+- The track match was run offline against the built assembly: 18 cases - bare, three-letter,
+  either case, `de-DE`, `de_CH`, padded, `eng`, `und`, empty, blank, null, `-de` - none wrong; the
+  harness itself was broken once on purpose (a case-sensitive set without `ger`) and reported
+  exactly the three cases it should.
+
 ## [11.40.0.0] / [12.40.0.0] - 2026-09-29
 
 ### Added
