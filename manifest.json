@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.41.2.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.41.2.0/jellyfin-plugin-jflint_12.41.2.0.zip",
+        "checksum": "98ec120594eb3bd58c9af175d5a434c5",
+        "changelog": "AudioStreamsDB?withoutLanguage now filters in the database first, so the files that have the language are not read at all; the answers are unchanged. A language code is now matched against the codes before the names: on Jellyfin 12, ga resolved to the language Ga instead of Irish, because the server's lookup compares display names first.",
+        "timestamp": "2026-09-28T23:38:48Z"
+      },
+      {
         "version": "12.41.0.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.41.0.0/jellyfin-plugin-jflint_12.41.0.0.zip",
@@ -366,6 +374,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.41.2.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.41.2.0/jellyfin-plugin-jflint_11.41.2.0.zip",
+        "checksum": "54fa9c27a4849c32d3ec8325cf1ed0db",
+        "changelog": "AudioStreamsDB?withoutLanguage now filters in the database first, so the files that have the language are not read at all; the answers are unchanged. A language code is now matched against the codes before the names: on Jellyfin 12, ga resolved to the language Ga instead of Irish, because the server's lookup compares display names first.",
+        "timestamp": "2026-09-28T23:38:48Z"
       },
       {
         "version": "11.41.0.0",
