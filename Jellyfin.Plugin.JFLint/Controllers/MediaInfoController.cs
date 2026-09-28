@@ -269,6 +269,12 @@ public class MediaInfoController(
     /// track at all. The last two are not "no German track" in the same sense as the first, and
     /// the rows keep their tracks and <c>StreamCount</c> so the caller can tell them apart.
     /// </para>
+    /// <para>
+    /// Since 12.41.1.0 the filter runs in the database first, so the files that have the language
+    /// are not read at all; 12.41.0.0 read every track and filtered in memory, which made the
+    /// filtered answer barely cheaper than the full one. The database drops only what it can
+    /// decide exactly, and <see cref="StreamLanguage.IsIn"/> still decides the rest.
+    /// </para>
     /// </remarks>
     /// <param name="withoutLanguage">Optional. Only files without an audio track in this
     /// language - <c>de</c>, <c>deu</c>, <c>ger</c> or <c>German</c> all mean German. Absent or
@@ -309,7 +315,33 @@ public class MediaInfoController(
         var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await using (dbContext.ConfigureAwait(false))
         {
-            var items = await MoviesAndEpisodes(dbContext, movieType, episodeType)
+            var candidates = MoviesAndEpisodes(dbContext, movieType, episodeType);
+            if (excluded is not null)
+            {
+                // The filter runs in SQL first, so the items that have the language - 27,000 of
+                // 29,000 for German on the reference library - are never read, and neither are
+                // their tracks. SQL drops only an item with a track whose STORED code is one of
+                // the language's codes exactly, as listed or upper case: such a track matches
+                // IsIn as well, since the only thing Jellyfin changes on the way out is a B code
+                // into its T code, and both are in the set. Everything SQL cannot decide exactly -
+                // de-DE, a padded or mixed-case code - is kept here and decided by IsIn below,
+                // which remains the rule. Two primitives only: an array Contains, which
+                // FileNameTitleDB has run on a 10.11 server since 2026-08, and a subquery
+                // Contains (NOT IN (SELECT ...)) - an old EF translation, but one that has not run
+                // on EF Core 9 here, because the reference server has been on 12 since 2026-09-10.
+                var exact = excluded
+                    .Concat(excluded.Select(code => code.ToUpperInvariant()))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                var speaking = dbContext.MediaStreamInfos
+                    .Where(stream => stream.StreamType == MediaStreamTypeEntity.Audio
+                        && stream.Language != null
+                        && exact.Contains(stream.Language))
+                    .Select(stream => stream.ItemId);
+                candidates = candidates.Where(item => !speaking.Contains(item.Id));
+            }
+
+            var items = await candidates
                 .AsNoTracking()
                 .Select(item => new { item.Id, item.Type, item.Name, item.SeriesName, item.Path })
                 .ToListAsync(cancellationToken)
@@ -321,7 +353,7 @@ public class MediaInfoController(
             var streamCounts = await dbContext.MediaStreamInfos
                 .AsNoTracking()
                 .Join(
-                    MoviesAndEpisodes(dbContext, movieType, episodeType),
+                    candidates,
                     stream => stream.ItemId,
                     item => item.Id,
                     (stream, item) => stream.ItemId)
@@ -330,8 +362,7 @@ public class MediaInfoController(
                 .ToDictionaryAsync(row => row.ItemId, row => row.Count, cancellationToken)
                 .ConfigureAwait(false);
 
-            var tracksByItem = await ReadAudioTracksAsync(
-                    dbContext, MoviesAndEpisodes(dbContext, movieType, episodeType), cancellationToken)
+            var tracksByItem = await ReadAudioTracksAsync(dbContext, candidates, cancellationToken)
                 .ConfigureAwait(false);
 
             var findings = items

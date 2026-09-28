@@ -134,6 +134,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.41.1.0] / [12.41.1.0] - 2026-09-29
+
+### Changed
+- **`AudioStreamsDB?withoutLanguage` filters in the database first.** 12.41.0.0 read every item
+  and every track and dropped the matching ones in memory, so the filtered call still paid for the
+  whole library: measured warm, 1,659 ms against 2,064 ms unfiltered - cheaper on the wire (1.16 MB
+  against 16.9 MB) but not in the reading. Now the items with a track in the language are excluded
+  in SQL (`NOT IN` over the audio streams whose stored code is one of the language's codes), and
+  the item, stream-count and track queries run over what is left.
+- The database drops only what it can decide exactly: a stored code equal to one of the language's
+  codes, as listed or upper case. Such a track matches `StreamLanguage.IsIn` too, because the only
+  change Jellyfin makes on the way out is a B code into its T code and both are in the set.
+  Everything else - `de-DE`, a padded or mixed-case code - reaches memory and is decided by
+  `IsIn` as before, so the answer is meant to stay byte-identical to 12.41.0.0's; those answers
+  were saved per language before the upgrade to hold it against.
+- One translation risk, named rather than assumed away: the subquery `Contains` has not run on
+  EF Core 9 in this project, because the reference server has been on Jellyfin 12 since
+  2026-09-10. The array `Contains` beside it has, in `FileNameTitleDB`.
+
 ## [11.41.0.0] / [12.41.0.0] - 2026-09-29
 
 ### Added
