@@ -21,7 +21,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Jellyfin.Plugin.JFLint.Controllers;
 
 /// <summary>
-/// Video properties per item, including the colour range the stock API cannot return cheaply.
+/// Video properties and audio tracks per item, including the colour range the stock API cannot
+/// return cheaply.
 /// </summary>
 /// <remarks>
 /// Requires elevation because the responses contain media file paths.
@@ -129,8 +130,7 @@ public class MediaInfoController(
                 .AsNoTracking()
                 .Where(stream => stream.StreamType == MediaStreamTypeEntity.Video)
                 .Join(
-                    dbContext.BaseItems.Where(item =>
-                        (item.Type == movieType || item.Type == episodeType) && !item.IsVirtualItem),
+                    MoviesAndEpisodes(dbContext, movieType, episodeType),
                     stream => stream.ItemId,
                     item => item.Id,
                     (stream, item) => new
@@ -169,35 +169,13 @@ public class MediaInfoController(
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            // Every audio track of the same items, in ONE more query rather than one per item -
-            // asked for by the calling tool for a "no track in language X" check. Kept as a
-            // second query instead of a second join into the one above: that one keeps a
-            // single video stream per item, and joining audio into it would multiply its rows
-            // by the track count before the grouping throws them away again.
-            var tracks = await dbContext.MediaStreamInfos
-                .AsNoTracking()
-                .Where(stream => stream.StreamType == MediaStreamTypeEntity.Audio)
-                .Join(
-                    dbContext.BaseItems.Where(item =>
-                        (item.Type == movieType || item.Type == episodeType) && !item.IsVirtualItem),
-                    stream => stream.ItemId,
-                    item => item.Id,
-                    (stream, item) => new
-                    {
-                        stream.ItemId,
-                        stream.StreamIndex,
-                        stream.Codec,
-                        stream.Profile,
-                        stream.Language,
-                        stream.ChannelLayout,
-                        stream.Channels
-                    })
-                .ToListAsync(cancellationToken)
+            // Asked for by the calling tool for a "no track in language X" check. Kept as a second
+            // query instead of a second join into the one above: that one keeps a single video
+            // stream per item, and joining audio into it would multiply its rows by the track
+            // count before the grouping throws them away again.
+            var tracksByItem = await ReadAudioTracksAsync(
+                    dbContext, MoviesAndEpisodes(dbContext, movieType, episodeType), cancellationToken)
                 .ConfigureAwait(false);
-
-            // A lookup answers an empty sequence for an item without tracks, so every row gets a
-            // list - empty meaning "no audio track", never null.
-            var tracksByItem = tracks.ToLookup(track => track.ItemId);
 
             // An item may hold more than one video stream; the first by index is the one the
             // server treats as the video, and reporting all of them would put an item into the
@@ -239,20 +217,154 @@ public class MediaInfoController(
                         videoRange,
                         videoRangeType,
                         row.Codec,
-                        tracksByItem[row.Id]
-                            .OrderBy(track => track.StreamIndex)
-                            .Select(track => new AudioStreamDto(
-                                track.StreamIndex,
-                                track.Codec,
-                                track.Profile,
-                                StreamLanguage.AsJellyfinReadsIt(localization, track.Language),
-                                track.ChannelLayout,
-                                track.Channels))
-                            .ToList());
+                        tracksByItem[row.Id].ToList());
                 });
 
             return Ok(Sorted(findings));
         }
+    }
+
+    /// <summary>
+    /// Gets the audio tracks of every movie and episode, including one Jellyfin never probed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why this exists next to <c>MediaInfoDB</c>, which carries the same tracks.</b> That
+    /// route starts from the video stream, so an item Jellyfin recorded no stream for is not in
+    /// its answer at all - and a "no track in language X" check built on it cannot flag the one
+    /// file that has no track in any language. Measured at 12.39.0.0's acceptance: three such
+    /// files on the reference library, all three zero-filled on disk. This route starts from the
+    /// items and left-joins the tracks, so every movie and episode gets a row.
+    /// </para>
+    /// <para>
+    /// The second reason is cost: the tracks roughly doubled <c>MediaInfoDB</c> (median
+    /// 1,006 ms to 1,939 ms, 13.2 MB to 18.9 MB), and the calling tool reads that route twice per
+    /// sweep. <c>MediaInfoDB</c> keeps its <c>AudioStreams</c> until the caller has moved here -
+    /// removing a field a released caller reads would break it.
+    /// </para>
+    /// <para>
+    /// <b>One row per file, and no twin</b> - both for the same reasons as <c>MediaInfoDB</c>.
+    /// The items are read raw from <c>BaseItems</c>, so an alternate version is a row of its own,
+    /// where <c>Fields=MediaStreams</c> folds it into its primary on Jellyfin 12. And
+    /// <c>IMediaSourceManager.GetMediaStreams</c> answers one item at a time, so a library half
+    /// would be tens of thousands of calls ending in the same stored rows.
+    /// </para>
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <response code="200">Audio tracks returned.</response>
+    /// <returns>One row per movie or episode that is not virtual.</returns>
+    [HttpGet("AudioStreamsDB")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ItemAudioStreamsDto>>> GetAudioStreamsFromDatabaseAsync(
+        CancellationToken cancellationToken)
+    {
+        var movieType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Movie];
+        var episodeType = itemTypeLookup.BaseItemKindNames[BaseItemKind.Episode];
+        var shortNames = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [movieType] = nameof(BaseItemKind.Movie),
+            [episodeType] = nameof(BaseItemKind.Episode)
+        };
+
+        var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        await using (dbContext.ConfigureAwait(false))
+        {
+            var items = await MoviesAndEpisodes(dbContext, movieType, episodeType)
+                .AsNoTracking()
+                .Select(item => new { item.Id, item.Type, item.Name, item.SeriesName, item.Path })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            // Grouped, not a count per item. An item absent from this dictionary has no stream
+            // row at all - the grouping runs over every stream of these items - so the default
+            // below is the real count, not a stand-in for a value that went missing.
+            var streamCounts = await dbContext.MediaStreamInfos
+                .AsNoTracking()
+                .Join(
+                    MoviesAndEpisodes(dbContext, movieType, episodeType),
+                    stream => stream.ItemId,
+                    item => item.Id,
+                    (stream, item) => stream.ItemId)
+                .GroupBy(itemId => itemId)
+                .Select(group => new { ItemId = group.Key, Count = group.Count() })
+                .ToDictionaryAsync(row => row.ItemId, row => row.Count, cancellationToken)
+                .ConfigureAwait(false);
+
+            var tracksByItem = await ReadAudioTracksAsync(
+                    dbContext, MoviesAndEpisodes(dbContext, movieType, episodeType), cancellationToken)
+                .ConfigureAwait(false);
+
+            var findings = items.Select(item => new ItemAudioStreamsDto(
+                item.Id,
+                shortNames[item.Type],
+                item.Name,
+                item.SeriesName,
+                StoredPath.Expand(appHost, item.Path),
+                streamCounts.GetValueOrDefault(item.Id),
+                tracksByItem[item.Id].ToList()));
+
+            return Ok(Sorted(findings));
+        }
+    }
+
+    /// <summary>
+    /// The items both routes here report on: every movie and episode that is not virtual, read
+    /// raw from <c>BaseItems</c> - so an alternate version is an item of its own.
+    /// </summary>
+    /// <param name="dbContext">The open database context.</param>
+    /// <param name="movieType">The stored type name of a movie.</param>
+    /// <param name="episodeType">The stored type name of an episode.</param>
+    /// <returns>The query, not yet run.</returns>
+    private static IQueryable<BaseItemEntity> MoviesAndEpisodes(
+        JellyfinDbContext dbContext, string movieType, string episodeType)
+        => dbContext.BaseItems.Where(item =>
+            (item.Type == movieType || item.Type == episodeType) && !item.IsVirtualItem);
+
+    /// <summary>
+    /// Reads every audio track of the given items in one query rather than one per item.
+    /// </summary>
+    /// <param name="dbContext">The open database context.</param>
+    /// <param name="items">The items whose tracks are wanted.</param>
+    /// <param name="cancellationToken">Cancellation token supplied by the framework.</param>
+    /// <returns>The tracks per item id, each group ordered by stream index. A lookup answers an
+    /// empty sequence for an item without tracks, so every caller gets a list - empty meaning
+    /// "no audio track", never null.</returns>
+    private async Task<ILookup<Guid, AudioStreamDto>> ReadAudioTracksAsync(
+        JellyfinDbContext dbContext, IQueryable<BaseItemEntity> items, CancellationToken cancellationToken)
+    {
+        var tracks = await dbContext.MediaStreamInfos
+            .AsNoTracking()
+            .Where(stream => stream.StreamType == MediaStreamTypeEntity.Audio)
+            .Join(
+                items,
+                stream => stream.ItemId,
+                item => item.Id,
+                (stream, item) => new
+                {
+                    stream.ItemId,
+                    stream.StreamIndex,
+                    stream.Codec,
+                    stream.Profile,
+                    stream.Language,
+                    stream.ChannelLayout,
+                    stream.Channels
+                })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        // A lookup keeps the source order inside each group, so ordering once up front orders
+        // every item's tracks.
+        return tracks
+            .OrderBy(track => track.StreamIndex)
+            .ToLookup(
+                track => track.ItemId,
+                track => new AudioStreamDto(
+                    track.StreamIndex,
+                    track.Codec,
+                    track.Profile,
+                    StreamLanguage.AsJellyfinReadsIt(localization, track.Language),
+                    track.ChannelLayout,
+                    track.Channels));
     }
 
     /// <summary>
@@ -261,6 +373,19 @@ public class MediaInfoController(
     /// <param name="items">The items to order.</param>
     /// <returns>The items by series, name, path and id.</returns>
     private static List<MediaInfoDto> Sorted(IEnumerable<MediaInfoDto> items)
+        => items
+            .OrderBy(item => item.SeriesName, StringComparer.Ordinal)
+            .ThenBy(item => item.Name, StringComparer.Ordinal)
+            .ThenBy(item => item.Path, StringComparer.Ordinal)
+            .ThenBy(item => item.Id)
+            .ToList();
+
+    /// <summary>
+    /// Orders findings deterministically, so two runs can be compared line by line.
+    /// </summary>
+    /// <param name="items">The items to order.</param>
+    /// <returns>The items by series, name, path and id.</returns>
+    private static List<ItemAudioStreamsDto> Sorted(IEnumerable<ItemAudioStreamsDto> items)
         => items
             .OrderBy(item => item.SeriesName, StringComparer.Ordinal)
             .ThenBy(item => item.Name, StringComparer.Ordinal)

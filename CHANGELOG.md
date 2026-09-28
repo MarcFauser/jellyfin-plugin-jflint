@@ -134,6 +134,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.40.0.0] / [12.40.0.0] - 2026-09-29
+
+### Added
+- **`GET /JFLint/AudioStreamsDB`**: the audio tracks of every movie and episode that is not
+  virtual - `Id`, `ItemType`, `Name`, `SeriesName`, `Path`, `StreamCount`, `AudioStreams`. The
+  tracks are the `AudioStreamDto` of `MediaInfoDB` and `DuplicateMovie` with the same promises:
+  always serialised, never null, `[]` when there is none, ordered by stream index, the language
+  read the way Jellyfin reads it.
+- **It starts from the items, not from the video stream**, and that is the reason it exists.
+  `MediaInfoDB` joins from the video stream, so a file Jellyfin never recorded a stream for is not
+  in its answer at all - and a "no track in language X" check built on it cannot flag the one
+  file that has no track in any language. 12.39.0.0's acceptance found three such items on the
+  reference library. Inspected read-only on the share afterwards: **all three files are
+  zero-filled** - their first bytes are `00 00 00 00` where a Matroska file starts
+  `1A 45 DF A3`, 17 samples of 64 KiB spread over each file hold not a single non-zero byte, and
+  their neighbours in the same folders are healthy.
+- **`StreamCount`** - streams of any type Jellyfin recorded for the file. `0` is what tells a
+  file ffprobe could not read from a probed file without audio; both have an empty
+  `AudioStreams`, and only the first is a broken file.
+- The second reason is cost: the tracks took `MediaInfoDB` from a median of 1,006 ms to 1,939 ms
+  and from 13.2 MB to 18.9 MB, and the calling tool reads that route twice per sweep.
+  `MediaInfoDB` keeps its `AudioStreams` until the caller has moved here - removing a field a
+  released caller reads would break it.
+- One row per file, alternate versions included, and no library twin - both for `MediaInfoDB`'s
+  reasons: the items are read raw from `BaseItems`, and `GetMediaStreams` asks one item at a time.
+
+### Changed
+- `MediaInfoDB` and `AudioStreamsDB` share one item filter and one track reader instead of two
+  copies of each. `MediaInfoDB`'s answer is meant to stay byte-identical; the 12.39.0.0 answer
+  was saved before the upgrade (18,857,500 bytes, stable over two reads) to hold it against.
+
 ## [11.39.0.0] / [12.39.0.0] - 2026-09-29
 
 ### Added
