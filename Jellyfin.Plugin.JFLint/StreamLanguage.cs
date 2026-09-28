@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using MediaBrowser.Model.Globalization;
 
 namespace Jellyfin.Plugin.JFLint;
@@ -44,12 +45,21 @@ public static class StreamLanguage
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <see cref="ILocalizationManager.FindLanguageInfo"/> resolves a two-letter code, either
-    /// three-letter code or the English name - <c>de</c>, <c>deu</c>, <c>ger</c>, <c>German</c> -
-    /// to one entry of <c>iso6392.txt</c>, read on <c>release-10.11.z</c> and <c>v12.1</c>. The
-    /// codes returned are that entry's two-letter code and every three-letter one, so for German
-    /// <c>de</c>, <c>deu</c> and <c>ger</c>: the bare two-letter form is not theoretical, 64
-    /// tracks on the reference library carry it.
+    /// A two-letter code, either three-letter code or the English name - <c>de</c>, <c>deu</c>,
+    /// <c>ger</c>, <c>German</c> - is resolved to one entry of the server's <c>iso6392.txt</c>,
+    /// read on <c>release-10.11.z</c> and <c>v12.1</c>. The codes returned are that entry's
+    /// two-letter code and every three-letter one, so for German <c>de</c>, <c>deu</c> and
+    /// <c>ger</c>: the bare two-letter form is not theoretical, 64 tracks on the reference library
+    /// carry it.
+    /// </para>
+    /// <para>
+    /// <b>A code is matched against the codes first, and only then as a name</b> - see
+    /// <see cref="Find"/>. <see cref="ILocalizationManager.FindLanguageInfo"/> alone checks the
+    /// display name first, and on Jellyfin 12 that turns <c>ga</c> into the language Ga
+    /// (<c>gaa|||Ga|ga</c>, line 146) instead of Irish (<c>gle||ga|Irish</c>, line 153). 10.11 does
+    /// not load the Ga line at all - it has no two-letter code - so there <c>ga</c> is Irish. Of the
+    /// 251 language codes the calling tool offers, <c>ga</c> is the only one this changes; nine
+    /// codes equal some display name, and for the other eight it is their own language's.
     /// </para>
     /// <para>
     /// The region is cut off before the lookup, as <see cref="IsIn"/> cuts it off a track: the
@@ -75,7 +85,7 @@ public static class StreamLanguage
             return null;
         }
 
-        var culture = localization.FindLanguageInfo(Bare(wanted)) ?? localization.FindLanguageInfo(wanted);
+        var culture = Find(localization, Bare(wanted)) ?? Find(localization, wanted);
         if (culture is null)
         {
             return null;
@@ -112,6 +122,33 @@ public static class StreamLanguage
     /// <returns>True for a match.</returns>
     public static bool IsIn(string? tag, IReadOnlySet<string> codes)
         => !string.IsNullOrWhiteSpace(tag) && codes.Contains(Bare(tag.Trim()));
+
+    /// <summary>
+    /// The entry of the server's language list a value names - by code first, by name second.
+    /// </summary>
+    /// <remarks>
+    /// The list is searched in file order, as <see cref="ILocalizationManager.FindLanguageInfo"/>
+    /// searches it, so a three-letter code shared by several entries resolves to the same one
+    /// there and here: the plain entry comes first in every such group (<c>spa</c> at <c>es</c>
+    /// before <c>es-419</c>, <c>por</c> at <c>pt</c> before <c>pt-pt</c> and <c>pt-br</c>,
+    /// <c>zho</c> at <c>zh</c> before its six regional entries - read on both lines).
+    /// </remarks>
+    /// <param name="localization">The server's localization manager.</param>
+    /// <param name="value">A code or a name, trimmed.</param>
+    /// <returns>The entry, or null when neither search finds one.</returns>
+    private static CultureDto? Find(ILocalizationManager localization, string value)
+    {
+        foreach (var culture in localization.GetCultures())
+        {
+            if (string.Equals(culture.TwoLetterISOLanguageName, value, StringComparison.OrdinalIgnoreCase)
+                || culture.ThreeLetterISOLanguageNames.Any(code => string.Equals(code, value, StringComparison.OrdinalIgnoreCase)))
+            {
+                return culture;
+            }
+        }
+
+        return localization.FindLanguageInfo(value);
+    }
 
     /// <summary>
     /// A language tag without its region.

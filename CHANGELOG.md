@@ -134,6 +134,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.41.2.0] / [12.41.2.0] - 2026-09-29
+
+### Fixed
+- **`withoutLanguage=ga` meant the language Ga on Jellyfin 12, not Irish.** The parameter was
+  resolved through `ILocalizationManager.FindLanguageInfo`, which compares the display name
+  before the codes; in `iso6392.txt` the line `gaa|||Ga|ga` (146) comes before `gle||ga|Irish`
+  (153), so `ga` found Ga. 10.11 does not load the Ga line - it has no two-letter code - so there
+  `ga` was Irish. Now a value is matched against the codes first, in the list's own order, and
+  only then as a name; `German` still resolves through `FindLanguageInfo`. Decided by the user.
+- Found by holding the calling tool's 251 language codes against the server's list offline: 192
+  give the same code set, 58 are unknown to the server (400), and `ga` was the only one that
+  differed. Nine codes equal some display name; for the other eight it is their own language's.
+- Proven offline against a stand-in that loads `iso6392.txt` as `LoadCultures` does on each line
+  and transcribes `FindLanguageInfo`: 18 values on both lines, 0 wrong; the 12.41.0.0 build run
+  against the same stand-in gets `ga` and `GA` wrong on the 12.1 list and nothing on 10.11. The
+  library has neither Irish nor Ga tracks, so no live answer can show the difference.
+- `11.41.1.0` / `12.41.1.0` was never published; the SQL filter ships with this version.
+
 ## [11.41.1.0] / [12.41.1.0] - 2026-09-29
 
 ### Changed
