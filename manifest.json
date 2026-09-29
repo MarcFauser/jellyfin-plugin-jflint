@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "12.42.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.42.0.0/jellyfin-plugin-jflint_12.42.0.0.zip",
+        "checksum": "a50e9da02f67a2597cc46a5e0749c862",
+        "changelog": "MediaInfoDB takes withoutAudioLanguage=de: only the files without an audio track in that language, combinable with includeAudio=true. The same rule and the same database-first filter as AudioStreamsDB?withoutLanguage, and the same 400 for a language the server does not know. Without the new parameter both routes answer as before.",
+        "timestamp": "2026-09-28T23:55:40Z"
+      },
+      {
         "version": "12.41.2.0",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v12.41.2.0/jellyfin-plugin-jflint_12.41.2.0.zip",
@@ -374,6 +382,14 @@
         "checksum": "b26870babb799054fcb298e06156116e",
         "changelog": "First release: EpisodesWithoutSeason and EpisodesWithoutSeasonDB.",
         "timestamp": "2026-07-29T17:44:37Z"
+      },
+      {
+        "version": "11.42.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/MarcFauser/jellyfin-plugin-jflint/releases/download/v11.42.0.0/jellyfin-plugin-jflint_11.42.0.0.zip",
+        "checksum": "506b364ece00f858749d1430d176c221",
+        "changelog": "MediaInfoDB takes withoutAudioLanguage=de: only the files without an audio track in that language, combinable with includeAudio=true. The same rule and the same database-first filter as AudioStreamsDB?withoutLanguage, and the same 400 for a language the server does not know. Without the new parameter both routes answer as before.",
+        "timestamp": "2026-09-28T23:55:40Z"
       },
       {
         "version": "11.41.2.0",
