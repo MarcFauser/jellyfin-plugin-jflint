@@ -5,6 +5,10 @@ obj/
 # Packaged plugin artifacts (built by build.ps1, not versioned)
 dist/
 
+# build.ps1 writes manifest.json here first and renames it into place; a leftover means a run
+# died mid-write and is overwritten by the next one
+manifest.json.tmp
+
 # Scratch/working dir: probe projects, downloaded Jellyfin sources, measurements
 tmp/
 

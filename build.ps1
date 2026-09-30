@@ -167,7 +167,13 @@ if ($Publish)
     {
         if ((Invoke-Native { gh release view "v$($t.Version)" --repo "$RepoOwner/$RepoName" }) -eq 0)
         {
-            throw "Release v$($t.Version) already exists. Raise the version in the project file rather than replacing a published artifact."
+            # The second sentence is for the one case where raising the version is the wrong
+            # step: a run that died between creating the releases and pushing the manifest.
+            # manifest.json is written before publishing, so that run left it complete but
+            # uncommitted - committing and pushing it finishes the release as it was meant.
+            throw ("Release v$($t.Version) already exists. Raise the version in the project file rather than replacing a published artifact. " +
+                   'If an earlier -Publish run died after creating the releases, they are complete and only the catalogue entry is missing: ' +
+                   'if git status shows manifest.json modified, commit and push it instead of raising the version.')
         }
     }
 }
@@ -308,15 +314,37 @@ $manifestPath = Join-Path $root 'manifest.json'
 
 if (Test-Path -LiteralPath $manifestPath)
 {
-    # Check the shape on the way in as well. A malformed manifest would otherwise be
-    # carried into the next build and fail somewhere further down with a confusing error.
+    # A damaged manifest stops the run - it is refused, never replaced by an empty one. And the
+    # advice matters as much as the refusal: this used to say "Delete it to start over", which
+    # sends the run into the else-branch below with versions = @(), so a -Publish would push a
+    # manifest listing only the versions it builds and drop every older one, checksum guard
+    # included. The file is versioned, so the last good one is always one command away.
+    # Replayed 2026-09-30 on copies: 0 bytes, NUL-filled and cut in half each land in one of
+    # the three throws below.
+    $restore = "Restore the last committed one with: git -C `"$root`" checkout -- manifest.json. " +
+               'Do not delete it - a run without it starts a manifest that lists only the versions it builds.'
+    $manifestText = Get-Content -LiteralPath $manifestPath -Raw
+    if ([string]::IsNullOrWhiteSpace($manifestText))
+    {
+        throw "$manifestPath is empty - a write that never finished. $restore"
+    }
+
     # @() is required: ConvertFrom-Json unrolls a one-element array into a bare object.
     # It also turns a doubly nested [[{...}]] into an array whose first element is itself
-    # an array - which is exactly what the type test below catches.
-    $loaded = @(ConvertFrom-Json -InputObject (Get-Content -LiteralPath $manifestPath -Raw))
+    # an array - which is exactly what the type test below catches. The try holds this one
+    # call and nothing else, so whatever it throws means "not JSON".
+    try
+    {
+        $loaded = @(ConvertFrom-Json -InputObject $manifestText)
+    }
+    catch
+    {
+        throw "$manifestPath is not valid JSON ($(($_.Exception.Message -split "`n")[0])). $restore"
+    }
+
     if ($loaded[0] -isnot [System.Management.Automation.PSCustomObject])
     {
-        throw "$manifestPath is not a flat JSON array of package objects. Delete it to start over."
+        throw "$manifestPath is not a flat JSON array of package objects. $restore"
     }
 
     $package = $loaded[0]
@@ -437,7 +465,26 @@ $package.versions = @($kept + $fresh | Sort-Object { [version]$_.version } -Desc
 #   ConvertTo-Json -InputObject @($p) -AsArray     -> [[{...}]] -AsArray wraps a second time
 #   ConvertTo-Json -InputObject @($p)              -> [{...}]   correct, also for 2+ packages
 $manifestJson = ConvertTo-Json -InputObject @($package) -Depth 6
-[System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.UTF8Encoding]::new($false))
+
+# Written to a neighbour, forced to disk, then renamed into place (~/.claude rule
+# atomic-state-files): WriteAllText truncates first, and a crash before the new bytes reach
+# the disk left a 0-byte manifest.json - the file the next run reads its whole release
+# history from. The rename replaces the file in one step, so it is either the old one or
+# the new one. The neighbour sits in the same directory, where a move is a rename, and is
+# gitignored; a leftover from a crash is simply overwritten by the next run.
+$manifestPending = "$manifestPath.tmp"
+$manifestBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($manifestJson)
+$manifestStream = [System.IO.FileStream]::new($manifestPending, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+try
+{
+    $manifestStream.Write($manifestBytes, 0, $manifestBytes.Length)
+    $manifestStream.Flush($true)
+}
+finally
+{
+    $manifestStream.Dispose()
+}
+[System.IO.File]::Move($manifestPending, $manifestPath, $true)
 
 # --- Checks -------------------------------------------------------------------------
 # Everything below reproduces what Jellyfin does with these files. Each of these once

@@ -134,6 +134,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   lives in the manifest, not in the plugin ZIP, so both artifacts stayed byte-identical
   and `11.1.0.1` / `12.1.0.1` remain valid.
 
+## [11.42.1.0] / [12.42.1.0] - 2026-09-30
+
+`build.ps1` only - the plugin's code is unchanged; the version is raised because every commit
+raises it.
+
+### Fixed
+- **`manifest.json` is written atomically**: to `manifest.json.tmp` in the same directory, forced
+  to disk, then renamed into place. `WriteAllText` truncated first, and a crash before the bytes
+  reached the disk would have left a 0-byte file - the one the next run reads the whole release
+  history, the checksum guard and the published changelogs from. Prompted by the Poster Overlays
+  plugin, whose `state.json` ended up at exactly 0 bytes after a hard VM kill. The neighbour is
+  gitignored; a leftover is overwritten by the next run.
+- **A damaged manifest now gives the right advice.** The old message said "Delete it to start
+  over", which sends the run into the branch that starts with an empty version list - a `-Publish`
+  after that would have pushed a manifest with only the new version and dropped every older one,
+  checksum guard included. All three damaged forms (empty, not an array, not JSON) now stop with
+  one advice: restore it with `git checkout -- manifest.json`. Before, an empty file stopped with a
+  parameter-binding error that said nothing about the manifest.
+- **"Release already exists" names the crash case**: a `-Publish` run that died between creating the
+  releases and pushing the manifest leaves complete releases and a written but uncommitted
+  manifest; committing and pushing it finishes the release, raising the version does not.
+
+### Measured
+- In a throwaway worktree, old and new script side by side: rebuilding the published 12.42.0.0
+  leaves the manifest byte-identical under both (`2ED5824A…`); adding a new entry gives the same
+  bytes under both (`BCBDFDE1…`, 95 versions); no `.tmp` left behind.
+- The three damaged forms, replayed on the worktree's manifest: each stops with exit 1 in its own
+  branch, leaves the file as it was, and carries the advice. Following the advice literally - the
+  `git checkout` it prints - and running again succeeds.
+
 ## [11.42.0.0] / [12.42.0.0] - 2026-09-29
 
 ### Added
